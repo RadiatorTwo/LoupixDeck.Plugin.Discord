@@ -12,6 +12,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Translations the host reads off disk from the plugin folder at runtime. -->
+    <Content Include="strings.*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="LoupixDeck.PluginSdk" Version="1.28.0">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>

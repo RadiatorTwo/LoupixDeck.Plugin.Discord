@@ -6,7 +6,7 @@
   "entryAssembly": "LoupixDeck.Plugin.Discord.dll",
   "platform": "All",
   "author": "",
-  "description": "",
+  "description": "Controls the Discord desktop app through its local RPC interface",
   "projectUrl": "",
   "iconFile": ""
 }
