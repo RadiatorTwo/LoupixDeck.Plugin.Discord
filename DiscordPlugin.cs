@@ -75,7 +75,8 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
         return
         [
             new ConnectionFeature(session),
-            new VoiceSettingsFeature(session, voice, host)
+            new VoiceSettingsFeature(session, voice, host),
+            new UserVoiceFeature(session, voice, host)
         ];
     }
 
