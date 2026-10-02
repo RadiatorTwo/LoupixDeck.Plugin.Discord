@@ -1,0 +1,12 @@
+{
+  "id": "discord",
+  "name": "Discord",
+  "version": "1.0.0",
+  "sdkVersion": "1.28",
+  "entryAssembly": "LoupixDeck.Plugin.Discord.dll",
+  "platform": "All",
+  "author": "",
+  "description": "",
+  "projectUrl": "",
+  "iconFile": ""
+}
