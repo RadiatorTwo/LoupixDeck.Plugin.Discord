@@ -77,7 +77,8 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
             new ConnectionFeature(session),
             new VoiceSettingsFeature(session, voice, host),
             new UserVoiceFeature(session, voice, host),
-            new VoiceChannelFeature(session, voice, guilds, host)
+            new VoiceChannelFeature(session, voice, guilds, host),
+            new TextChannelFeature(session, guilds)
         ];
     }
 
