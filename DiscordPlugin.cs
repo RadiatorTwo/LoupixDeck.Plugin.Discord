@@ -1,3 +1,4 @@
+using LoupixDeck.Plugin.Discord.Domain;
 using LoupixDeck.Plugin.Discord.Features;
 using LoupixDeck.Plugin.Discord.Rpc;
 using LoupixDeck.Plugin.Discord.Security;
@@ -21,6 +22,9 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
     private readonly ScopeRegistry _scopes = new();
     private readonly List<IDiscordFeature> _features = [];
     private readonly List<IPluginCommand> _commands = [];
+
+    /// <summary>Features and the shared caches they use, disposed on shutdown.</summary>
+    private readonly List<IDisposable> _disposables = [];
 
     private IPluginHost? _host;
     private ISecretStore? _secrets;
@@ -48,6 +52,8 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
 
         foreach (IDiscordFeature feature in CreateFeatures(_session, host))
         {
+            if (feature is IDisposable disposable)
+                _disposables.Add(disposable);
             _features.Add(feature);
             _scopes.Add(feature.RequiredScopes);
             _commands.AddRange(feature.Commands);
@@ -58,10 +64,20 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
     }
 
     /// <summary>Every feature of the plugin — a new one is one more line here.</summary>
-    private static IEnumerable<IDiscordFeature> CreateFeatures(DiscordSession session, IPluginHost host) =>
-    [
-        new ConnectionFeature(session)
-    ];
+    private IEnumerable<IDiscordFeature> CreateFeatures(DiscordSession session, IPluginHost host)
+    {
+        // Shared caches: one set of event subscriptions, however many features read them.
+        VoiceStateTracker voice = new(session, host.Logger);
+        GuildDirectory guilds = new(session, host.Logger);
+        _disposables.Add(voice);
+        _disposables.Add(guilds);
+
+        return
+        [
+            new ConnectionFeature(session),
+            new VoiceSettingsFeature(session, voice, host)
+        ];
+    }
 
     public override IEnumerable<IPluginCommand> GetCommands() => _commands;
 
@@ -77,9 +93,9 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
 
     public override void Shutdown()
     {
-        foreach (IDisposable feature in _features.OfType<IDisposable>())
+        foreach (IDisposable disposable in _disposables)
         {
-            try { feature.Dispose(); }
+            try { disposable.Dispose(); }
             catch { /* shutting down */ }
         }
 
