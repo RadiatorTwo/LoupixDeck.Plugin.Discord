@@ -53,16 +53,23 @@ internal sealed class DiscordAuthenticator(
         if (!scopes.IsCoveredBy(tokens.Scopes))
             return AuthOutcome.NeedsAuth(tr(RpcErrorMapper.ScopesChanged));
 
+        // Refreshing needs the client secret. Without it, ask for the settings instead of
+        // throwing away a refresh token that works again once the secret is entered.
+        bool canRefresh = tokens.RefreshToken != null && !string.IsNullOrWhiteSpace(app.ClientSecret);
+        bool expired = tokens.ExpiresAt - RefreshMargin <= DateTimeOffset.UtcNow;
+        if (expired && !canRefresh)
+            return AuthOutcome.NeedsAuth(tr(RpcErrorMapper.MissingConfig));
+
         try
         {
-            if (tokens.ExpiresAt - RefreshMargin <= DateTimeOffset.UtcNow)
+            if (expired)
                 tokens = await RefreshAsync(app, tokens, ct).ConfigureAwait(false);
 
             try
             {
                 return await AuthenticateAsync(tokens, ct).ConfigureAwait(false);
             }
-            catch (RpcException ex) when (ex.Code == RpcErrorCodes.InvalidToken && tokens.RefreshToken != null)
+            catch (RpcException ex) when (ex.Code == RpcErrorCodes.InvalidToken && canRefresh)
             {
                 // Revoked or expired earlier than announced — one refresh, then give up.
                 tokens = await RefreshAsync(app, tokens, ct).ConfigureAwait(false);
@@ -166,10 +173,7 @@ internal sealed class DiscordAuthenticator(
 
     private async Task<TokenSet> RefreshAsync(DiscordAppConfig app, TokenSet tokens, CancellationToken ct)
     {
-        if (tokens.RefreshToken == null || string.IsNullOrWhiteSpace(app.ClientSecret))
-            throw new OAuthException(0, "invalid_grant");
-
-        TokenSet refreshed = await oauth.RefreshAsync(app, tokens.RefreshToken, ct).ConfigureAwait(false);
+        TokenSet refreshed = await oauth.RefreshAsync(app, tokens.RefreshToken!, ct).ConfigureAwait(false);
         if (refreshed.Scopes.Count == 0)
             refreshed = refreshed with { Scopes = tokens.Scopes };
         SaveTokens(refreshed);
