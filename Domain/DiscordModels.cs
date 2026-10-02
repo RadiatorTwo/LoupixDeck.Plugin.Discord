@@ -7,10 +7,17 @@ namespace LoupixDeck.Plugin.Discord.Domain;
 /// The parts of the voice settings the features use (RPC docs, "GET_VOICE_SETTINGS").
 /// Input volume ranges 0–100, output volume 0–200.
 /// </summary>
-internal sealed record VoiceSettingsSnapshot(bool Mute, bool Deaf, double InputVolume, double OutputVolume)
+internal sealed record VoiceSettingsSnapshot(bool Mute, bool Deaf, double InputVolume, double OutputVolume,
+    string? InputMode)
 {
     public const double MaxInputVolume = 100;
     public const double MaxOutputVolume = 200;
+
+    // Voice settings mode types (RPC docs, "Voice Settings Mode Object").
+    public const string PushToTalk = "PUSH_TO_TALK";
+    public const string VoiceActivity = "VOICE_ACTIVITY";
+
+    public bool IsPushToTalk => InputMode == PushToTalk;
 
     public static VoiceSettingsSnapshot? Parse(JsonElement data)
     {
@@ -20,7 +27,8 @@ internal sealed record VoiceSettingsSnapshot(bool Mute, bool Deaf, double InputV
             Json.Bool(data, "mute"),
             Json.Bool(data, "deaf"),
             data.TryGetProperty("input", out JsonElement input) ? Json.Double(input, "volume") : 0,
-            data.TryGetProperty("output", out JsonElement output) ? Json.Double(output, "volume") : 0);
+            data.TryGetProperty("output", out JsonElement output) ? Json.Double(output, "volume") : 0,
+            data.TryGetProperty("mode", out JsonElement mode) ? DiscordRpcClient.GetString(mode, "type") : null);
     }
 }
 

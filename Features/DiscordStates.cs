@@ -43,6 +43,21 @@ internal static class DiscordStates
             [On] = new("DEAF", Red, true)
         };
 
+    /// <summary>Visuals for a plain on/off toggle: highlighted label when on, outline when off.</summary>
+    public static IReadOnlyDictionary<string, StateVisual> Visuals(string onLabel, string offLabel) =>
+        new Dictionary<string, StateVisual>(StringComparer.OrdinalIgnoreCase)
+        {
+            [Off] = new(offLabel, Inactive, false),
+            [On] = new(onLabel, Red, true)
+        };
+
+    public static IReadOnlyDictionary<string, StateVisual> InputModeVisuals { get; } =
+        new Dictionary<string, StateVisual>(StringComparer.OrdinalIgnoreCase)
+        {
+            [Off] = new("VOICE", Blurple, false),
+            [On] = new("PTT", Blurple, true)
+        };
+
     public static ToggleMode ParseMode(CommandContext ctx, int index = 0) =>
         ctx.Parameters.Length > index && Enum.TryParse(ctx.Parameters[index], true, out ToggleMode mode)
             ? mode

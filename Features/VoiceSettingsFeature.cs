@@ -28,6 +28,7 @@ internal sealed class VoiceSettingsFeature : IDiscordFeature, IDisposable
         [
             new MuteCommand(rpc, tracker),
             new DeafenCommand(rpc, tracker),
+            new VoiceInputModeCommand(rpc, tracker),
             new VoiceVolumeCommand(rpc, tracker, VoiceVolumeCommand.Direction.Input),
             new VoiceVolumeCommand(rpc, tracker, VoiceVolumeCommand.Direction.Output)
         ];
@@ -46,6 +47,7 @@ internal sealed class VoiceSettingsFeature : IDiscordFeature, IDisposable
 
         DiscordStates.Push(_host, MuteCommand.Name, settings.Mute);
         DiscordStates.Push(_host, DeafenCommand.Name, settings.Deaf);
+        DiscordStates.Push(_host, VoiceInputModeCommand.Name, settings.IsPushToTalk);
         _host.RequestButtonRefresh(VoiceVolumeCommand.InputName);
         _host.RequestButtonRefresh(VoiceVolumeCommand.OutputName);
     }
@@ -129,6 +131,51 @@ internal sealed class DeafenCommand(IDiscordRpc rpc, VoiceStateTracker tracker) 
             try
             {
                 await VoiceSettingsFeature.SetAsync(rpc, tracker, new JsonObject { ["deaf"] = deaf }).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                CommandFeedback.ShowError(ctx, Name, ex, RpcErrorContext.VoiceSettingsWrite);
+            }
+        }
+        catch (Exception ex)
+        {
+            CommandFeedback.ShowError(ctx, Name, ex);
+        }
+    }
+}
+
+/// <summary>Switches between voice activity and push to talk (SET_VOICE_SETTINGS <c>mode.type</c>).</summary>
+internal sealed class VoiceInputModeCommand(IDiscordRpc rpc, VoiceStateTracker tracker) : DiscordStatefulCommand
+{
+    public const string Name = "Discord.VoiceInputMode";
+
+    public override CommandDescriptor Descriptor { get; } = new()
+    {
+        CommandName = Name,
+        DisplayName = "Discord: Voice Input Mode",
+        Group = "Discord",
+        Icon = "󰍬",
+        Description = "Switches between voice activity and push to talk. 'On' means push to talk",
+        ParameterTemplate = "({mode})",
+        Parameters = [new CommandParameter("mode", typeof(ToggleMode)) { DefaultValue = nameof(ToggleMode.Toggle) }],
+        States = DiscordStates.Toggle
+    };
+
+    protected override IReadOnlyDictionary<string, StateVisual> Visuals => DiscordStates.InputModeVisuals;
+
+    public override async Task Execute(CommandContext ctx)
+    {
+        try
+        {
+            VoiceSettingsSnapshot current = await tracker.GetSettingsAsync().ConfigureAwait(false);
+            bool pushToTalk = DiscordStates.Resolve(DiscordStates.ParseMode(ctx), current.IsPushToTalk);
+            string type = pushToTalk ? VoiceSettingsSnapshot.PushToTalk : VoiceSettingsSnapshot.VoiceActivity;
+
+            try
+            {
+                await VoiceSettingsFeature.SetAsync(rpc, tracker,
+                    new JsonObject { ["mode"] = new JsonObject { ["type"] = type } }).ConfigureAwait(false);
+                CommandFeedback.Show(ctx, ctx.Host.Tr(pushToTalk ? "Push to talk" : "Voice activity"));
             }
             catch (Exception ex)
             {
