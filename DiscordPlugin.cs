@@ -62,7 +62,7 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
             if (feature is IDisposable disposable)
                 _disposables.Add(disposable);
             _features.Add(feature);
-            _scopes.Add(feature.RequiredScopes);
+            _scopes.AddSource(() => feature.RequiredScopes);
             _commands.AddRange(feature.Commands);
         }
 

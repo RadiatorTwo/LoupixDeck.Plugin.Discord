@@ -14,16 +14,33 @@ internal sealed class ScopeRegistry
     /// <summary>Needed for any RPC access at all, plus the user's identity for the status line.</summary>
     private static readonly string[] BaseScopes = ["rpc", "identify"];
 
-    private readonly SortedSet<string> _scopes = new(BaseScopes, StringComparer.Ordinal);
+    private readonly Lock _gate = new();
+    private readonly List<Func<IEnumerable<string>>> _sources = [];
 
-    public IReadOnlyCollection<string> Scopes => _scopes;
-
-    public void Add(IEnumerable<string> scopes)
+    /// <summary>The current union of the base scopes and every source, sorted.</summary>
+    public IReadOnlyCollection<string> Scopes
     {
-        foreach (string scope in scopes)
-            _scopes.Add(scope);
+        get
+        {
+            List<Func<IEnumerable<string>>> sources;
+            lock (_gate) sources = [.. _sources];
+
+            SortedSet<string> scopes = new(BaseScopes, StringComparer.Ordinal);
+            foreach (Func<IEnumerable<string>> source in sources)
+                scopes.UnionWith(source());
+            return scopes;
+        }
+    }
+
+    /// <summary>
+    /// Adds a provider that is asked on every check, so a feature whose needs depend on a
+    /// setting (opt-in scopes) is covered without restarting the plugin.
+    /// </summary>
+    public void AddSource(Func<IEnumerable<string>> source)
+    {
+        lock (_gate) _sources.Add(source);
     }
 
     /// <summary>True when <paramref name="granted"/> includes every required scope.</summary>
-    public bool IsCoveredBy(IEnumerable<string> granted) => _scopes.IsSubsetOf(granted);
+    public bool IsCoveredBy(IEnumerable<string> granted) => Scopes.ToHashSet().IsSubsetOf(granted);
 }
