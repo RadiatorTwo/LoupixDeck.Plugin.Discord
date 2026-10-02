@@ -17,58 +17,63 @@ namespace LoupixDeck.Plugin.Discord.Features;
 /// payload is logged once so the field can be corrected.
 /// </para>
 /// <para>
-/// The scopes <c>rpc.video.*</c> and <c>rpc.screenshare.*</c> are not in the OAuth2 docs either.
-/// If Discord rejects them for non-partner apps, AUTHORIZE fails as a whole — so the feature is
-/// opt-in through a setting and requests its scopes only while enabled.
+/// The scopes <c>rpc.video.*</c> and <c>rpc.screenshare.*</c> are not in the OAuth2 docs either,
+/// so they are optional: if Discord refuses them, the plugin connects without them and only
+/// these two buttons are unavailable.
 /// </para>
 /// </remarks>
 internal sealed class MediaFeature : IDiscordFeature, IDisposable
 {
+    public const string ScreenshareReadScope = "rpc.screenshare.read";
+    public const string ScreenshareWriteScope = "rpc.screenshare.write";
+    public const string VideoReadScope = "rpc.video.read";
+    public const string VideoWriteScope = "rpc.video.write";
+
     private static readonly string[] Scopes =
-        ["rpc.video.read", "rpc.video.write", "rpc.screenshare.read", "rpc.screenshare.write"];
+        [VideoReadScope, VideoWriteScope, ScreenshareReadScope, ScreenshareWriteScope];
 
     private readonly IDiscordRpc _rpc;
     private readonly IPluginHost _host;
-    private readonly Func<bool> _enabled;
     private readonly List<IDisposable> _subscriptions = [];
     private bool _payloadLogged;
 
-    public MediaFeature(IDiscordRpc rpc, VoiceStateTracker tracker, IPluginHost host, Func<bool> enabled)
+    public MediaFeature(IDiscordRpc rpc, VoiceStateTracker tracker, IPluginHost host)
     {
         _rpc = rpc;
         _host = host;
-        _enabled = enabled;
         Commands =
         [
-            new MediaToggleCommand(rpc, tracker, enabled, MediaToggleCommand.Kind.Screenshare),
-            new MediaToggleCommand(rpc, tracker, enabled, MediaToggleCommand.Kind.Video)
+            new MediaToggleCommand(rpc, tracker, MediaToggleCommand.Kind.Screenshare),
+            new MediaToggleCommand(rpc, tracker, MediaToggleCommand.Kind.Video)
         ];
 
         rpc.Authenticated += SyncSubscriptions;
     }
 
-    public IReadOnlyCollection<string> RequiredScopes => _enabled() ? Scopes : [];
+    public IReadOnlyCollection<string> RequiredScopes => [];
+
+    public IReadOnlyCollection<string> OptionalScopes => Scopes;
 
     public IEnumerable<IPluginCommand> Commands { get; }
 
-    /// <summary>Subscribes while enabled; runs after every (re)authentication.</summary>
+    /// <summary>
+    /// Subscribes only with the matching permission (without it Discord rejects the SUBSCRIBE);
+    /// runs after every (re)authentication, as the granted scopes may have changed.
+    /// </summary>
     private void SyncSubscriptions()
     {
         lock (_subscriptions)
         {
-            if (_enabled() && _subscriptions.Count == 0)
-            {
+            foreach (IDisposable subscription in _subscriptions)
+                subscription.Dispose();
+            _subscriptions.Clear();
+
+            if (_rpc.HasScope(ScreenshareReadScope))
                 _subscriptions.Add(_rpc.Subscribe("SCREENSHARE_STATE_UPDATE", null,
                     data => OnStateUpdate(MediaToggleCommand.ScreenshareName, "SCREENSHARE_STATE_UPDATE", data)));
+            if (_rpc.HasScope(VideoReadScope))
                 _subscriptions.Add(_rpc.Subscribe("VIDEO_STATE_UPDATE", null,
                     data => OnStateUpdate(MediaToggleCommand.VideoName, "VIDEO_STATE_UPDATE", data)));
-            }
-            else if (!_enabled() && _subscriptions.Count > 0)
-            {
-                foreach (IDisposable subscription in _subscriptions)
-                    subscription.Dispose();
-                _subscriptions.Clear();
-            }
         }
     }
 
@@ -102,7 +107,8 @@ internal sealed class MediaToggleCommand : DiscordStatefulCommand
 {
     public const string ScreenshareName = "Discord.ToggleScreenshare";
     public const string VideoName = "Discord.ToggleVideo";
-    public const string EnableHint = "Enable camera and screen share in the Discord plugin settings";
+    public const string PermissionHint =
+        "Discord did not grant this permission — press \"Connect with Discord\" in the plugin settings";
 
     private static readonly IReadOnlyDictionary<string, StateVisual> ScreenshareVisuals =
         DiscordStates.Visuals("LIVE", "SHARE");
@@ -112,17 +118,16 @@ internal sealed class MediaToggleCommand : DiscordStatefulCommand
 
     private readonly IDiscordRpc _rpc;
     private readonly VoiceStateTracker _tracker;
-    private readonly Func<bool> _enabled;
     private readonly string _rpcCommand;
+    private readonly string _writeScope;
 
-    public MediaToggleCommand(IDiscordRpc rpc, VoiceStateTracker tracker, Func<bool> enabled, Kind kind)
+    public MediaToggleCommand(IDiscordRpc rpc, VoiceStateTracker tracker, Kind kind)
     {
         _rpc = rpc;
         _tracker = tracker;
-        _enabled = enabled;
-
         bool share = kind == Kind.Screenshare;
         _rpcCommand = share ? "TOGGLE_SCREENSHARE" : "TOGGLE_VIDEO";
+        _writeScope = share ? MediaFeature.ScreenshareWriteScope : MediaFeature.VideoWriteScope;
         Visuals = share ? ScreenshareVisuals : VideoVisuals;
         Descriptor = new CommandDescriptor
         {
@@ -131,8 +136,8 @@ internal sealed class MediaToggleCommand : DiscordStatefulCommand
             Group = "Discord",
             Icon = share ? "\U000F0379" : "\U000F0567",
             Description = share
-                ? "Starts or stops sharing your screen in the voice channel (experimental)"
-                : "Turns your camera on or off in the voice channel (experimental)",
+                ? "Starts or stops sharing your screen in the voice channel"
+                : "Turns your camera on or off in the voice channel",
             States = DiscordStates.Toggle
         };
     }
@@ -151,11 +156,11 @@ internal sealed class MediaToggleCommand : DiscordStatefulCommand
     {
         try
         {
-            if (!_enabled())
+            if (_rpc.IsReady && !_rpc.HasScope(_writeScope))
             {
                 // Simple buttons have no display for the overlay; leave a trace in the log too.
-                ctx.Host.Logger.Warn($"{Descriptor.CommandName}: disabled — enable \"Camera and screen share\" in the plugin settings.");
-                CommandFeedback.Show(ctx, ctx.Host.Tr(EnableHint));
+                ctx.Host.Logger.Warn($"{Descriptor.CommandName}: scope {_writeScope} not granted.");
+                CommandFeedback.Show(ctx, ctx.Host.Tr(PermissionHint));
                 return;
             }
 

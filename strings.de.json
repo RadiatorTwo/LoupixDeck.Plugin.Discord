@@ -110,15 +110,12 @@
   "command does not exist": "Befehl existiert nicht",
   "full reply in the log": "vollständige Antwort im Log",
   "Discord: Screen Share": "Discord: Bildschirm übertragen",
-  "Starts or stops sharing your screen in the voice channel (experimental)": "Startet oder beendet die Bildschirmübertragung im Sprachkanal (experimentell)",
   "Discord: Camera": "Discord: Kamera",
-  "Turns your camera on or off in the voice channel (experimental)": "Schaltet deine Kamera im Sprachkanal an oder aus (experimentell)",
-  "Enable camera and screen share in the Discord plugin settings": "Aktiviere Kamera und Bildschirmübertragung in den Einstellungen des Discord-Plugins",
   "Discord: Voice Input Mode": "Discord: Eingabemodus",
   "Switches between voice activity and push to talk. 'On' means push to talk": "Wechselt zwischen Sprachaktivierung und Push-to-Talk. „An“ bedeutet Push-to-Talk",
   "Push to talk": "Push-to-Talk",
   "Voice activity": "Sprachaktivierung",
-  "Experimental": "Experimentell",
-  "Camera and screen share": "Kamera und Bildschirmübertragung",
-  "Enables the camera and screen share buttons. They use undocumented RPC permissions; if connecting fails afterwards, turn this off again": "Aktiviert die Buttons für Kamera und Bildschirmübertragung. Sie nutzen undokumentierte RPC-Berechtigungen; schlägt das Verbinden danach fehl, schalte dies wieder aus"
+  "Starts or stops sharing your screen in the voice channel": "Startet oder beendet die Bildschirmübertragung im Sprachkanal",
+  "Turns your camera on or off in the voice channel": "Schaltet deine Kamera im Sprachkanal an oder aus",
+  "Discord did not grant this permission — press \"Connect with Discord\" in the plugin settings": "Discord hat diese Berechtigung nicht erteilt – klicke in den Plugin-Einstellungen auf „Mit Discord verbinden“"
 }

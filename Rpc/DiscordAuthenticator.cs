@@ -7,13 +7,14 @@ namespace LoupixDeck.Plugin.Discord.Rpc;
 
 /// <summary>Result of an authentication attempt; <see cref="Failure"/> is already translated.</summary>
 internal sealed record AuthOutcome(bool Success, string? UserId, string? UserName, string? Failure,
-    bool NeedsAuthorization)
+    bool NeedsAuthorization, IReadOnlyList<string> GrantedScopes)
 {
-    public static AuthOutcome Ok(string? userId, string? userName) => new(true, userId, userName, null, false);
+    public static AuthOutcome Ok(string? userId, string? userName, IReadOnlyList<string> granted) =>
+        new(true, userId, userName, null, false, granted);
 
-    public static AuthOutcome NeedsAuth(string message) => new(false, null, null, message, true);
+    public static AuthOutcome NeedsAuth(string message) => new(false, null, null, message, true, []);
 
-    public static AuthOutcome Failed(string message) => new(false, null, null, message, false);
+    public static AuthOutcome Failed(string message) => new(false, null, null, message, false, []);
 }
 
 /// <summary>
@@ -99,16 +100,20 @@ internal sealed class DiscordAuthenticator(
 
         try
         {
-            JsonObject args = new()
+            string code;
+            List<string> optional = scopes.OptionalScopes.ToList();
+            try
             {
-                ["client_id"] = app.ClientId,
-                ["scopes"] = new JsonArray(scopes.Scopes.Select(s => (JsonNode?)JsonValue.Create(s)).ToArray())
-            };
-
-            JsonElement data = await rpc.SendCommandAsync("AUTHORIZE", args, timeout: AuthorizeTimeout, ct: ct)
-                .ConfigureAwait(false);
-            string code = DiscordRpcClient.GetString(data, "code")
-                          ?? throw new RpcException("AUTHORIZE", RpcErrorCodes.OAuth2Error, "No code in reply");
+                code = await RequestCodeAsync(app, [.. scopes.Scopes, .. optional], ct).ConfigureAwait(false);
+            }
+            catch (RpcException ex) when (optional.Count > 0
+                                          && ex.RpcMessage.Contains("scope", StringComparison.OrdinalIgnoreCase))
+            {
+                // Discord refused one of the undocumented optional scopes for this app. Connect
+                // without them; only the features that need them stay unavailable.
+                logger.Warn($"Discord refused optional scopes ({ex.Code} {ex.RpcMessage}); authorizing without {string.Join(", ", optional)}.");
+                code = await RequestCodeAsync(app, scopes.Scopes, ct).ConfigureAwait(false);
+            }
 
             TokenSet tokens = await oauth.ExchangeCodeAsync(app, code, ct).ConfigureAwait(false);
             if (tokens.Scopes.Count == 0)
@@ -122,6 +127,21 @@ internal sealed class DiscordAuthenticator(
             logger.Warn($"Discord authorization failed: {ex.Message}");
             return AuthOutcome.NeedsAuth(RpcErrorMapper.Describe(ex, RpcErrorContext.Authorize, tr));
         }
+    }
+
+    private async Task<string> RequestCodeAsync(DiscordAppConfig app, IEnumerable<string> requested,
+        CancellationToken ct)
+    {
+        JsonObject args = new()
+        {
+            ["client_id"] = app.ClientId,
+            ["scopes"] = new JsonArray(requested.Distinct().Select(s => (JsonNode?)JsonValue.Create(s)).ToArray())
+        };
+
+        JsonElement data = await rpc.SendCommandAsync("AUTHORIZE", args, timeout: AuthorizeTimeout, ct: ct)
+            .ConfigureAwait(false);
+        return DiscordRpcClient.GetString(data, "code")
+               ?? throw new RpcException("AUTHORIZE", RpcErrorCodes.OAuth2Error, "No code in reply");
     }
 
     /// <summary>Forgets the tokens locally and revokes them at Discord (best effort).</summary>
@@ -150,14 +170,19 @@ internal sealed class DiscordAuthenticator(
         JsonElement data = await rpc.SendCommandAsync("AUTHENTICATE", args, ct: ct).ConfigureAwait(false);
 
         // The reply lists what was actually granted; keep it so a later scope check is accurate.
+        IReadOnlyList<string> grantedScopes = tokens.Scopes;
         if (data.TryGetProperty("scopes", out JsonElement granted) && granted.ValueKind == JsonValueKind.Array)
         {
-            List<string> grantedScopes = granted.EnumerateArray()
+            List<string> reported = granted.EnumerateArray()
                 .Select(s => s.GetString())
                 .OfType<string>()
                 .ToList();
-            if (grantedScopes.Count > 0 && !grantedScopes.SequenceEqual(tokens.Scopes))
-                SaveTokens(tokens with { Scopes = grantedScopes });
+            if (reported.Count > 0)
+            {
+                grantedScopes = reported;
+                if (!reported.SequenceEqual(tokens.Scopes))
+                    SaveTokens(tokens with { Scopes = reported });
+            }
         }
 
         string? userId = null;
@@ -168,7 +193,7 @@ internal sealed class DiscordAuthenticator(
             userName = DiscordRpcClient.GetString(u, "global_name") ?? DiscordRpcClient.GetString(u, "username");
         }
 
-        return AuthOutcome.Ok(userId, userName);
+        return AuthOutcome.Ok(userId, userName, grantedScopes);
     }
 
     private async Task<TokenSet> RefreshAsync(DiscordAppConfig app, TokenSet tokens, CancellationToken ct)

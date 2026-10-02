@@ -15,6 +15,9 @@ internal interface IDiscordRpc
     /// <summary>ID of the signed-in Discord user, from AUTHENTICATE.</summary>
     string? CurrentUserId { get; }
 
+    /// <summary>True when the current authorization includes <paramref name="scope"/> (for optional scopes).</summary>
+    bool HasScope(string scope);
+
     /// <summary>
     /// Sends any RPC command (documented or not) and returns the reply's <c>data</c>.
     /// Throws <see cref="RpcException"/>, <see cref="RpcTimeoutException"/> or

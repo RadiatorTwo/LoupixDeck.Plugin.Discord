@@ -12,7 +12,6 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
     private const string ClientSecretKey = "clientSecret";
     private const string RedirectUriKey = "redirectUri";
     private const string DebugLogKey = "debugLog";
-    private const string MediaKey = "experimentalMedia";
     private const string TestCommandKey = "rpcTestCommand";
     private const string TestArgsKey = "rpcTestArgs";
     private const string TestEventKey = "rpcTestEvent";
@@ -37,7 +36,6 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
     private DiscordSession? _session;
     private RpcTester? _tester;
     private string _lastClientId = string.Empty;
-    private bool _lastMediaEnabled;
 
     public override PluginMetadata Metadata { get; } = new()
     {
@@ -65,11 +63,11 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
                 _disposables.Add(disposable);
             _features.Add(feature);
             _scopes.AddSource(() => feature.RequiredScopes);
+            _scopes.AddOptionalSource(() => feature.OptionalScopes);
             _commands.AddRange(feature.Commands);
         }
 
         _lastClientId = ReadAppConfig().ClientId;
-        _lastMediaEnabled = host.Settings.Get<bool>(MediaKey);
         _session.Start();
     }
 
@@ -90,7 +88,7 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
             new VoiceChannelFeature(session, voice, guilds, host),
             new TextChannelFeature(session, guilds),
             new SoundboardFeature(session, voice, guilds, host.Logger),
-            new MediaFeature(session, voice, host, () => host.Settings.Get<bool>(MediaKey))
+            new MediaFeature(session, voice, host)
         ];
     }
 
@@ -203,20 +201,6 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
                 Kind = PluginSettingKind.Text,
                 DefaultValue = DefaultRedirectUri,
                 Description = "Must exactly match a redirect URI registered on the OAuth2 page of the application"
-            },
-            new()
-            {
-                Key = "__heading_experimental",
-                Label = "Experimental",
-                Kind = PluginSettingKind.Heading
-            },
-            new()
-            {
-                Key = MediaKey,
-                Label = "Camera and screen share",
-                Kind = PluginSettingKind.Toggle,
-                DefaultValue = false,
-                Description = "Enables the camera and screen share buttons. They use undocumented RPC permissions; if connecting fails afterwards, turn this off again"
             },
             new()
             {
@@ -340,13 +324,9 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
                 MoveClientSecretToSecretStore();
 
                 string clientId = ReadAppConfig().ClientId;
-                bool mediaEnabled = _host?.Settings.Get<bool>(MediaKey) ?? false;
-                if (clientId == _lastClientId && mediaEnabled == _lastMediaEnabled) return;
+                if (clientId == _lastClientId) return;
 
-                // A new client ID needs a new connection; a changed scope set is checked on
-                // reconnect (enabling camera/screen share asks the user to connect again).
                 _lastClientId = clientId;
-                _lastMediaEnabled = mediaEnabled;
                 _session?.Restart();
             }
             catch (Exception ex)

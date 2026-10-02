@@ -17,6 +17,12 @@ internal interface IDiscordFeature
     /// <summary>OAuth2 scopes on top of the base set (<c>rpc</c>, <c>identify</c>).</summary>
     IReadOnlyCollection<string> RequiredScopes { get; }
 
+    /// <summary>
+    /// Scopes that are requested but may be refused (undocumented ones). The feature checks
+    /// <see cref="Rpc.IDiscordRpc.HasScope"/> before using them.
+    /// </summary>
+    IReadOnlyCollection<string> OptionalScopes => [];
+
     IEnumerable<IPluginCommand> Commands { get; }
 
     /// <summary>

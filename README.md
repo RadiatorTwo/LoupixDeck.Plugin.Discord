@@ -88,8 +88,8 @@ RPC docs, "Restrictions").
 | `Discord.CurrentVoiceChannel` | – | Shows your voice channel and how many people are in it. |
 | `Discord.Speaking` | – | Shows who is speaking in your voice channel. |
 | `Discord.OpenTextChannel` | `channelId` | Switch the Discord app to a text channel. |
-| `Discord.ToggleScreenshare` | – | Start/stop screen share (Go Live). Experimental, see below. |
-| `Discord.ToggleVideo` | – | Camera on/off. Experimental, see below. |
+| `Discord.ToggleScreenshare` | – | Start/stop screen share (Go Live). Undocumented, see below. |
+| `Discord.ToggleVideo` | – | Camera on/off. Undocumented, see below. |
 | `Discord.PlaySoundboardSound` | `soundId`, `guildId` | Play a soundboard sound in your voice channel (undocumented RPC, see below). |
 
 Servers, channels and users are picked in the command menu under **Discord ▸** (*Join voice
@@ -101,7 +101,6 @@ active connection.
 | Setting | Meaning |
 |---|---|
 | Client ID / Client secret / Redirect URI | The Discord application, see [Setup](#setup). |
-| Camera and screen share | Enables `Discord.ToggleScreenshare` and `Discord.ToggleVideo`. Requests the extra scopes `rpc.video.*` and `rpc.screenshare.*`, which are not in Discord's docs — if connecting fails afterwards, turn it off again. |
 | Log RPC traffic | Writes every RPC message in both directions to the LoupixDeck log. Tokens, the OAuth code and the client secret are masked. Meant for finding undocumented commands and events. |
 | RPC tester: command / arguments / event | Sends any RPC command with JSON arguments (and, for `SUBSCRIBE`, an event name) on the authenticated connection. Save the fields, then press **Send RPC command**; the reply is shown below the button and written to the log. `ERROR 4002` means the command does not exist. |
 
@@ -122,7 +121,8 @@ active connection.
 1. Create a class implementing `IDiscordFeature` in `Features/`:
    - `RequiredScopes` — extra OAuth2 scopes (the base set is `rpc`, `identify`).
    - `Commands` — the `IPluginCommand`s. `CommandName`s are public API: never rename them.
-   - optionally `GetMenuNodes` — pickers built from cached data.
+   - `OptionalScopes` — undocumented scopes Discord may refuse; check `rpc.HasScope(...)` before use.
+   - optional `GetMenuNodes`
 2. Send commands with `rpc.CommandAsync("CMD", new JsonObject { … })`, subscribe to events with
    `rpc.Subscribe("EVENT", args, handler)` in the constructor — subscriptions survive reconnects.
 3. Report failures with `CommandFeedback.ShowError(ctx, name, ex, context)`; `RpcErrorMapper`
@@ -153,7 +153,9 @@ Camera and screen share use, from the same source:
 | `SCREENSHARE_STATE_UPDATE`, `VIDEO_STATE_UPDATE` | Live button state; an `active` flag is expected. |
 | scopes `rpc.screenshare.read/write`, `rpc.video.read/write` | Permissions for the above. |
 
-These are not verified yet.
+These scopes are requested as *optional*: if Discord refuses them, the plugin connects without
+them and only the camera and screen share buttons are unavailable. Users connected before these
+buttons existed get them by pressing **Connect with Discord** once more. Not verified yet.
 
 Still open, marked `TODO(...)`:
 

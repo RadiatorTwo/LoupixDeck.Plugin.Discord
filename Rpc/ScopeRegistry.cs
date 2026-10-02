@@ -16,29 +16,36 @@ internal sealed class ScopeRegistry
 
     private readonly Lock _gate = new();
     private readonly List<Func<IEnumerable<string>>> _sources = [];
+    private readonly List<Func<IEnumerable<string>>> _optionalSources = [];
 
-    /// <summary>The current union of the base scopes and every source, sorted.</summary>
-    public IReadOnlyCollection<string> Scopes
-    {
-        get
-        {
-            List<Func<IEnumerable<string>>> sources;
-            lock (_gate) sources = [.. _sources];
-
-            SortedSet<string> scopes = new(BaseScopes, StringComparer.Ordinal);
-            foreach (Func<IEnumerable<string>> source in sources)
-                scopes.UnionWith(source());
-            return scopes;
-        }
-    }
+    /// <summary>Required scopes: the base set plus every source, sorted. A token must cover these.</summary>
+    public IReadOnlyCollection<string> Scopes => Collect(_sources, BaseScopes);
 
     /// <summary>
-    /// Adds a provider that is asked on every check, so a feature whose needs depend on a
-    /// setting (opt-in scopes) is covered without restarting the plugin.
+    /// Scopes that are asked for but may be refused — undocumented ones Discord might not grant to
+    /// every app. Without them only the features that declared them are unavailable.
     /// </summary>
+    public IReadOnlyCollection<string> OptionalScopes => Collect(_optionalSources, []);
+
     public void AddSource(Func<IEnumerable<string>> source)
     {
         lock (_gate) _sources.Add(source);
+    }
+
+    public void AddOptionalSource(Func<IEnumerable<string>> source)
+    {
+        lock (_gate) _optionalSources.Add(source);
+    }
+
+    private SortedSet<string> Collect(List<Func<IEnumerable<string>>> list, IEnumerable<string> seed)
+    {
+        List<Func<IEnumerable<string>>> sources;
+        lock (_gate) sources = [.. list];
+
+        SortedSet<string> scopes = new(seed, StringComparer.Ordinal);
+        foreach (Func<IEnumerable<string>> source in sources)
+            scopes.UnionWith(source());
+        return scopes;
     }
 
     /// <summary>True when <paramref name="granted"/> includes every required scope.</summary>

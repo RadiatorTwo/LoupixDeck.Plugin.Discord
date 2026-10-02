@@ -16,6 +16,7 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
     private readonly DiscordRpcClient _rpc;
     private readonly RpcEventBus _bus;
     private readonly DiscordAuthenticator _auth;
+    private readonly ScopeRegistry _scopes;
     private readonly IPluginLogger _logger;
     private readonly Func<string, string> _tr;
     private readonly SemaphoreSlim _authLock = new(1, 1);
@@ -27,6 +28,7 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
     {
         _logger = logger;
         _tr = tr;
+        _scopes = scopes;
         _rpc = new DiscordRpcClient(() => config().ClientId, () => new DiscordIpcTransport(), logger, debug);
         _bus = new RpcEventBus(() => _authenticated,
             (cmd, args, evt) => _rpc.SendCommandAsync(cmd, args, evt), logger);
@@ -43,6 +45,17 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
     public bool IsReady => _authenticated;
 
     public string? CurrentUserId { get; private set; }
+
+    private IReadOnlySet<string> _grantedScopes = new HashSet<string>();
+
+    public bool HasScope(string scope) => _authenticated && _grantedScopes.Contains(scope);
+
+    /// <summary>True when the granted scopes lack an optional one — "Connect" asks for it again.</summary>
+    private bool MissingOptionalScopes(IEnumerable<string> granted)
+    {
+        HashSet<string> set = [.. granted];
+        return _scopes.OptionalScopes.Any(s => !set.Contains(s));
+    }
 
     public event Action<DiscordConnectionState>? StateChanged;
 
@@ -75,15 +88,36 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
         await _authLock.WaitAsync(_shutdown.Token).ConfigureAwait(false);
         try
         {
-            if (_authenticated)
+            if (_authenticated && !MissingOptionalScopes(_grantedScopes))
                 return State.Describe(_tr);
 
-            AuthOutcome outcome = await _auth.AuthenticateStoredAsync(_shutdown.Token).ConfigureAwait(false);
-            if (!outcome.Success)
-                outcome = await _auth.AuthorizeAsync(_shutdown.Token).ConfigureAwait(false);
+            // The stored token is enough unless optional permissions (a feature added since) are
+            // missing; then the popup asks for them, and Discord may still refuse them.
+            AuthOutcome? stored = null;
+            if (!_authenticated)
+            {
+                stored = await _auth.AuthenticateStoredAsync(_shutdown.Token).ConfigureAwait(false);
+                if (stored.Success && !MissingOptionalScopes(stored.GrantedScopes))
+                {
+                    await ApplyAsync(stored).ConfigureAwait(false);
+                    return State.Describe(_tr);
+                }
+            }
 
-            await ApplyAsync(outcome).ConfigureAwait(false);
-            return outcome.Success ? State.Describe(_tr) : outcome.Failure ?? State.Describe(_tr);
+            AuthOutcome authorized = await _auth.AuthorizeAsync(_shutdown.Token).ConfigureAwait(false);
+            if (authorized.Success)
+            {
+                await ApplyAsync(authorized).ConfigureAwait(false);
+                return State.Describe(_tr);
+            }
+
+            // Authorization failed (declined popup, …): keep whatever already works.
+            if (stored?.Success == true)
+                await ApplyAsync(stored).ConfigureAwait(false);
+            else if (!_authenticated)
+                await ApplyAsync(authorized).ConfigureAwait(false);
+
+            return authorized.Failure ?? State.Describe(_tr);
         }
         finally
         {
@@ -191,6 +225,7 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
             return;
         }
 
+        _grantedScopes = outcome.GrantedScopes.ToHashSet();
         _authenticated = true;
         CurrentUserId = outcome.UserId;
         SetState(new DiscordConnectionState(DiscordConnectionStatus.Connected, outcome.UserName));
