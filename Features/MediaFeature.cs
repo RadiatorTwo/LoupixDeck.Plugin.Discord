@@ -1,0 +1,173 @@
+using System.Text.Json;
+using LoupixDeck.Plugin.Discord.Domain;
+using LoupixDeck.Plugin.Discord.Rpc;
+using LoupixDeck.PluginSdk;
+
+namespace LoupixDeck.Plugin.Discord.Features;
+
+/// <summary>
+/// Camera and screen share ("Go Live") toggles: <c>TOGGLE_VIDEO</c> / <c>TOGGLE_SCREENSHARE</c>,
+/// live state via <c>VIDEO_STATE_UPDATE</c> / <c>SCREENSHARE_STATE_UPDATE</c>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Not in Discord's RPC docs.</b> Command, event and scope names come from the official Elgato
+/// Stream Deck Discord plugin (2.4.0). The commands take no arguments there (the actions have no
+/// settings); the event payload is expected to carry an <c>active</c> flag — if it does not, the
+/// payload is logged once so the field can be corrected.
+/// </para>
+/// <para>
+/// The scopes <c>rpc.video.*</c> and <c>rpc.screenshare.*</c> are not in the OAuth2 docs either.
+/// If Discord rejects them for non-partner apps, AUTHORIZE fails as a whole — so the feature is
+/// opt-in through a setting and requests its scopes only while enabled.
+/// </para>
+/// </remarks>
+internal sealed class MediaFeature : IDiscordFeature, IDisposable
+{
+    private static readonly string[] Scopes =
+        ["rpc.video.read", "rpc.video.write", "rpc.screenshare.read", "rpc.screenshare.write"];
+
+    private readonly IDiscordRpc _rpc;
+    private readonly IPluginHost _host;
+    private readonly Func<bool> _enabled;
+    private readonly List<IDisposable> _subscriptions = [];
+    private bool _payloadLogged;
+
+    public MediaFeature(IDiscordRpc rpc, VoiceStateTracker tracker, IPluginHost host, Func<bool> enabled)
+    {
+        _rpc = rpc;
+        _host = host;
+        _enabled = enabled;
+        Commands =
+        [
+            new MediaToggleCommand(rpc, tracker, enabled, MediaToggleCommand.Kind.Screenshare),
+            new MediaToggleCommand(rpc, tracker, enabled, MediaToggleCommand.Kind.Video)
+        ];
+
+        rpc.Authenticated += SyncSubscriptions;
+    }
+
+    public IReadOnlyCollection<string> RequiredScopes => _enabled() ? Scopes : [];
+
+    public IEnumerable<IPluginCommand> Commands { get; }
+
+    /// <summary>Subscribes while enabled; runs after every (re)authentication.</summary>
+    private void SyncSubscriptions()
+    {
+        lock (_subscriptions)
+        {
+            if (_enabled() && _subscriptions.Count == 0)
+            {
+                _subscriptions.Add(_rpc.Subscribe("SCREENSHARE_STATE_UPDATE", null,
+                    data => OnStateUpdate(MediaToggleCommand.ScreenshareName, "SCREENSHARE_STATE_UPDATE", data)));
+                _subscriptions.Add(_rpc.Subscribe("VIDEO_STATE_UPDATE", null,
+                    data => OnStateUpdate(MediaToggleCommand.VideoName, "VIDEO_STATE_UPDATE", data)));
+            }
+            else if (!_enabled() && _subscriptions.Count > 0)
+            {
+                foreach (IDisposable subscription in _subscriptions)
+                    subscription.Dispose();
+                _subscriptions.Clear();
+            }
+        }
+    }
+
+    private void OnStateUpdate(string commandName, string evt, JsonElement data)
+    {
+        if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("active", out JsonElement active)
+            && active.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            DiscordStates.Push(_host, commandName, active.GetBoolean());
+            return;
+        }
+
+        if (_payloadLogged) return;
+        _payloadLogged = true;
+        _host.Logger.Info($"{evt} without 'active' flag: {RpcDebugLog.Redact(data.GetRawText())}");
+    }
+
+    public void Dispose()
+    {
+        _rpc.Authenticated -= SyncSubscriptions;
+        lock (_subscriptions)
+        {
+            foreach (IDisposable subscription in _subscriptions)
+                subscription.Dispose();
+            _subscriptions.Clear();
+        }
+    }
+}
+
+internal sealed class MediaToggleCommand : DiscordStatefulCommand
+{
+    public const string ScreenshareName = "Discord.ToggleScreenshare";
+    public const string VideoName = "Discord.ToggleVideo";
+    public const string EnableHint = "Enable camera and screen share in the Discord plugin settings";
+
+    private static readonly IReadOnlyDictionary<string, StateVisual> ScreenshareVisuals =
+        DiscordStates.Visuals("LIVE", "SHARE");
+
+    private static readonly IReadOnlyDictionary<string, StateVisual> VideoVisuals =
+        DiscordStates.Visuals("CAM", "CAM");
+
+    private readonly IDiscordRpc _rpc;
+    private readonly VoiceStateTracker _tracker;
+    private readonly Func<bool> _enabled;
+    private readonly string _rpcCommand;
+
+    public MediaToggleCommand(IDiscordRpc rpc, VoiceStateTracker tracker, Func<bool> enabled, Kind kind)
+    {
+        _rpc = rpc;
+        _tracker = tracker;
+        _enabled = enabled;
+
+        bool share = kind == Kind.Screenshare;
+        _rpcCommand = share ? "TOGGLE_SCREENSHARE" : "TOGGLE_VIDEO";
+        Visuals = share ? ScreenshareVisuals : VideoVisuals;
+        Descriptor = new CommandDescriptor
+        {
+            CommandName = share ? ScreenshareName : VideoName,
+            DisplayName = share ? "Discord: Screen Share" : "Discord: Camera",
+            Group = "Discord",
+            Icon = share ? "\U000F0379" : "\U000F0567",
+            Description = share
+                ? "Starts or stops sharing your screen in the voice channel (experimental)"
+                : "Turns your camera on or off in the voice channel (experimental)",
+            States = DiscordStates.Toggle
+        };
+    }
+
+    public enum Kind
+    {
+        Screenshare,
+        Video
+    }
+
+    public override CommandDescriptor Descriptor { get; }
+
+    protected override IReadOnlyDictionary<string, StateVisual> Visuals { get; }
+
+    public override async Task Execute(CommandContext ctx)
+    {
+        try
+        {
+            if (!_enabled())
+            {
+                CommandFeedback.Show(ctx, ctx.Host.Tr(EnableHint));
+                return;
+            }
+
+            if (_rpc.IsReady && _tracker.Channel == null)
+            {
+                CommandFeedback.Show(ctx, ctx.Host.Tr(RpcErrorMapper.NotInVoiceChannel));
+                return;
+            }
+
+            await _rpc.CommandAsync(_rpcCommand).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            CommandFeedback.ShowError(ctx, Descriptor.CommandName, ex);
+        }
+    }
+}

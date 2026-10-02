@@ -79,6 +79,7 @@ RPC docs, "Restrictions").
 | `Discord.Mute` | `mode` (`Toggle`/`On`/`Off`) | Microphone mute. The button follows changes made in Discord. |
 | `Discord.Deafen` | `mode` | Deafen. The button follows changes made in Discord. |
 | `Discord.InputVolume` | `step` (default 5) | Dial: microphone volume 0–100, press to mute. |
+| `Discord.VoiceInputMode` | `mode` | Voice activity ↔ push to talk (*On* = push to talk). |
 | `Discord.OutputVolume` | `step` (default 5) | Dial: output volume 0–200, press to deafen. |
 | `Discord.UserVolume` | `userId`, `step` (default 10) | Dial: how loud you hear a user (0–200 %), press to mute them for you. |
 | `Discord.UserMute` | `userId` | Mute a user for you only. |
@@ -87,6 +88,8 @@ RPC docs, "Restrictions").
 | `Discord.CurrentVoiceChannel` | – | Shows your voice channel and how many people are in it. |
 | `Discord.Speaking` | – | Shows who is speaking in your voice channel. |
 | `Discord.OpenTextChannel` | `channelId` | Switch the Discord app to a text channel. |
+| `Discord.ToggleScreenshare` | – | Start/stop screen share (Go Live). Experimental, see below. |
+| `Discord.ToggleVideo` | – | Camera on/off. Experimental, see below. |
 | `Discord.PlaySoundboardSound` | `soundId`, `guildId` | Play a soundboard sound in your voice channel (undocumented RPC, see below). |
 
 Servers, channels and users are picked in the command menu under **Discord ▸** (*Join voice
@@ -98,6 +101,7 @@ active connection.
 | Setting | Meaning |
 |---|---|
 | Client ID / Client secret / Redirect URI | The Discord application, see [Setup](#setup). |
+| Camera and screen share | Enables `Discord.ToggleScreenshare` and `Discord.ToggleVideo`. Requests the extra scopes `rpc.video.*` and `rpc.screenshare.*`, which are not in Discord's docs — if connecting fails afterwards, turn it off again. |
 | Log RPC traffic | Writes every RPC message in both directions to the LoupixDeck log. Tokens, the OAuth code and the client secret are masked. Meant for finding undocumented commands and events. |
 | RPC tester: command / arguments / event | Sends any RPC command with JSON arguments (and, for `SUBSCRIBE`, an event name) on the authenticated connection. Save the fields, then press **Send RPC command**; the reply is shown below the button and written to the log. `ERROR 4002` means the command does not exist. |
 
@@ -140,6 +144,16 @@ Stream Deck Discord plugin (2.4.0) uses over the same IPC interface:
 
 Both were verified against the Discord client (October 2026). Being undocumented, they may change
 without notice; the RPC tester in the settings helps re-check them.
+
+Camera and screen share use, from the same source:
+
+| Command / event | Used for |
+|---|---|
+| `TOGGLE_SCREENSHARE`, `TOGGLE_VIDEO` (no arguments) | Toggle screen share / camera. |
+| `SCREENSHARE_STATE_UPDATE`, `VIDEO_STATE_UPDATE` | Live button state; an `active` flag is expected. |
+| scopes `rpc.screenshare.read/write`, `rpc.video.read/write` | Permissions for the above. |
+
+These are not verified yet.
 
 Still open, marked `TODO(...)`:
 
