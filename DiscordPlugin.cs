@@ -54,6 +54,9 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
         MoveClientSecretToSecretStore();
 
         RpcDebugLog debugLog = new(host.Logger, () => host.Settings.Get<bool>(DebugLogKey));
+        // Before the features: their descriptors translate the button captions while being built.
+        DiscordButtonLayouts.Translate = host.Tr;
+
         _session = new DiscordSession(ReadAppConfig, _secrets, _scopes, host.Logger, debugLog, host.Tr);
         _tester = new RpcTester(_session, host.Logger, host.Tr);
 
@@ -100,7 +103,7 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
         {
             Group = "Discord",
             Description = "Voice, channels and status of the Discord app",
-            Icon = "\U000F066F"
+            Icon = DiscordButtonLayouts.Headset
         }
     ];
 

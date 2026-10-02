@@ -110,12 +110,6 @@ internal sealed class MediaToggleCommand : DiscordStatefulCommand
     public const string PermissionHint = "Discord did not grant this permission";
     public const string ConfirmHint = "Confirm the permission in Discord";
 
-    private static readonly IReadOnlyDictionary<string, StateVisual> ScreenshareVisuals =
-        DiscordStates.Visuals("LIVE", "SHARE");
-
-    private static readonly IReadOnlyDictionary<string, StateVisual> VideoVisuals =
-        DiscordStates.Visuals("CAM", "CAM");
-
     private readonly IDiscordRpc _rpc;
     private readonly VoiceStateTracker _tracker;
     private readonly string _rpcCommand;
@@ -128,13 +122,14 @@ internal sealed class MediaToggleCommand : DiscordStatefulCommand
         bool share = kind == Kind.Screenshare;
         _rpcCommand = share ? "TOGGLE_SCREENSHARE" : "TOGGLE_VIDEO";
         _writeScope = share ? MediaFeature.ScreenshareWriteScope : MediaFeature.VideoWriteScope;
-        Visuals = share ? ScreenshareVisuals : VideoVisuals;
+        Visuals = share ? DiscordStates.ScreenShareVisuals : DiscordStates.VideoVisuals;
         Descriptor = new CommandDescriptor
         {
             CommandName = share ? ScreenshareName : VideoName,
             DisplayName = share ? "Discord: Screen Share" : "Discord: Camera",
             Group = "Discord",
-            Icon = share ? "\U000F0379" : "\U000F0567",
+            Icon = share ? DiscordButtonLayouts.ScreenShare : DiscordButtonLayouts.Video,
+            ButtonLayout = DiscordButtonLayouts.DrawnByCommand,
             Description = share
                 ? "Starts or stops streaming in the voice channel — the detected game directly, otherwise Discord asks what to share"
                 : "Turns your camera on or off in the voice channel",

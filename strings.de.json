@@ -118,5 +118,21 @@
   "Turns your camera on or off in the voice channel": "Schaltet deine Kamera im Sprachkanal an oder aus",
   "Discord did not grant this permission": "Discord hat diese Berechtigung nicht erteilt",
   "Confirm the permission in Discord": "Bestätige die Berechtigung in Discord",
-  "Starts or stops streaming in the voice channel — the detected game directly, otherwise Discord asks what to share": "Startet oder beendet den Stream im Sprachkanal – ein erkanntes Spiel direkt, sonst fragt Discord, was übertragen werden soll"
+  "Starts or stops streaming in the voice channel — the detected game directly, otherwise Discord asks what to share": "Startet oder beendet den Stream im Sprachkanal – ein erkanntes Spiel direkt, sonst fragt Discord, was übertragen werden soll",
+  "Mic": "Mikro",
+  "Muted": "Stumm",
+  "Sound": "Ton",
+  "Deafened": "Ton aus",
+  "Voice": "Sprache",
+  "PTT": "PTT",
+  "Go Live": "Go Live",
+  "Live": "Live",
+  "Camera": "Kamera",
+  "Camera on": "Kamera an",
+  "Mute User": "Stummschalten",
+  "Join": "Beitreten",
+  "Leave": "Verlassen",
+  "Voice Channel": "Sprachkanal",
+  "Speaking": "Spricht",
+  "Text Channel": "Textkanal"
 }

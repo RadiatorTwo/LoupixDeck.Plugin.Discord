@@ -11,7 +11,8 @@ internal enum ToggleMode
     Off
 }
 
-internal readonly record struct StateVisual(string Label, PluginColor Accent, bool Active);
+/// <summary>How one state is drawn: an MDI symbol (by name) with an English caption below it.</summary>
+internal readonly record struct StateVisual(string Symbol, string Caption, PluginColor Color);
 
 /// <summary>Button states the toggle commands declare; the host creates them when the command is assigned.</summary>
 internal static class DiscordStates
@@ -19,9 +20,9 @@ internal static class DiscordStates
     public const string Off = "Off";
     public const string On = "On";
 
-    private static readonly PluginColor Inactive = PluginColor.FromRgb(0x60, 0x66, 0x70);
-    private static readonly PluginColor Blurple = PluginColor.FromRgb(0x58, 0x65, 0xF2);
+    private static readonly PluginColor Normal = PluginColor.White;
     private static readonly PluginColor Red = PluginColor.FromRgb(0xED, 0x42, 0x45);
+    private static readonly PluginColor Green = PluginColor.FromRgb(0x23, 0xA5, 0x5A);
 
     public static IReadOnlyList<ButtonStateDescriptor> Toggle { get; } =
     [
@@ -29,34 +30,28 @@ internal static class DiscordStates
         new() { Name = On, Description = "On" }
     ];
 
-    public static IReadOnlyDictionary<string, StateVisual> MuteVisuals { get; } =
-        new Dictionary<string, StateVisual>(StringComparer.OrdinalIgnoreCase)
-        {
-            [Off] = new("MIC", Blurple, false),
-            [On] = new("MUTED", Red, true)
-        };
+    public static IReadOnlyDictionary<string, StateVisual> MuteVisuals { get; } = Pair(
+        off: new(DiscordButtonLayouts.MicrophoneSymbol, "Mic", Normal),
+        on: new(DiscordButtonLayouts.MicrophoneOffSymbol, "Muted", Red));
 
-    public static IReadOnlyDictionary<string, StateVisual> DeafenVisuals { get; } =
-        new Dictionary<string, StateVisual>(StringComparer.OrdinalIgnoreCase)
-        {
-            [Off] = new("AUDIO", Blurple, false),
-            [On] = new("DEAF", Red, true)
-        };
+    public static IReadOnlyDictionary<string, StateVisual> DeafenVisuals { get; } = Pair(
+        off: new(DiscordButtonLayouts.HeadphonesSymbol, "Sound", Normal),
+        on: new(DiscordButtonLayouts.HeadphonesOffSymbol, "Deafened", Red));
 
-    /// <summary>Visuals for a plain on/off toggle: highlighted label when on, outline when off.</summary>
-    public static IReadOnlyDictionary<string, StateVisual> Visuals(string onLabel, string offLabel) =>
-        new Dictionary<string, StateVisual>(StringComparer.OrdinalIgnoreCase)
-        {
-            [Off] = new(offLabel, Inactive, false),
-            [On] = new(onLabel, Red, true)
-        };
+    public static IReadOnlyDictionary<string, StateVisual> InputModeVisuals { get; } = Pair(
+        off: new(DiscordButtonLayouts.VoiceActivitySymbol, "Voice", Normal),
+        on: new(DiscordButtonLayouts.PushToTalkSymbol, "PTT", Normal));
 
-    public static IReadOnlyDictionary<string, StateVisual> InputModeVisuals { get; } =
-        new Dictionary<string, StateVisual>(StringComparer.OrdinalIgnoreCase)
-        {
-            [Off] = new("VOICE", Blurple, false),
-            [On] = new("PTT", Blurple, true)
-        };
+    public static IReadOnlyDictionary<string, StateVisual> ScreenShareVisuals { get; } = Pair(
+        off: new(DiscordButtonLayouts.MonitorSymbol, "Go Live", Normal),
+        on: new(DiscordButtonLayouts.ScreenShareSymbol, "Live", Red));
+
+    public static IReadOnlyDictionary<string, StateVisual> VideoVisuals { get; } = Pair(
+        off: new(DiscordButtonLayouts.VideoOffSymbol, "Camera", Normal),
+        on: new(DiscordButtonLayouts.VideoSymbol, "Camera on", Green));
+
+    private static Dictionary<string, StateVisual> Pair(StateVisual off, StateVisual on) =>
+        new(StringComparer.OrdinalIgnoreCase) { [Off] = off, [On] = on };
 
     public static ToggleMode ParseMode(CommandContext ctx, int index = 0) =>
         ctx.Parameters.Length > index && Enum.TryParse(ctx.Parameters[index], true, out ToggleMode mode)
@@ -87,7 +82,7 @@ internal static class DiscordStates
 
 /// <summary>
 /// Base for commands with declared On/Off states: the feature pushes the live Discord state with
-/// <see cref="IPluginHost.SetActiveButtonState"/>, this class draws the indicator for it.
+/// <see cref="IPluginHost.SetActiveButtonState"/>, this class draws icon and caption for it.
 /// </summary>
 internal abstract class DiscordStatefulCommand : IDisplayImageCommand
 {
@@ -108,19 +103,19 @@ internal abstract class DiscordStatefulCommand : IDisplayImageCommand
         if (ctx.StateName == null || !Visuals.TryGetValue(ctx.StateName, out StateVisual visual))
             return false;
 
-        int size = Math.Min(canvas.Width, canvas.Height);
-        int radius = Math.Max(6, size / 6);
-        int centerX = canvas.Width / 2;
-        int centerY = (canvas.Height / 2) - (size / 10);
+        // Same geometry as DiscordButtonLayouts.IconWithCaption, scaled from a 90 px key, so a drawn
+        // state looks like the layout the other commands create.
+        double scale = Math.Min(canvas.Width, canvas.Height) / 90.0;
+        int iconSize = (int)Math.Round(90 * DiscordButtonLayouts.IconScale * scale);
+        int iconX = (canvas.Width - iconSize) / 2;
+        int iconY = ((canvas.Height - iconSize) / 2) + (int)Math.Round(DiscordButtonLayouts.IconOffsetY * scale);
+        canvas.DrawSymbol(visual.Symbol, iconX, iconY, iconSize, iconSize, visual.Color);
 
-        if (visual.Active)
-            canvas.FillCircle(centerX, centerY, radius, visual.Accent);
-        else
-            canvas.DrawCircle(centerX, centerY, radius, Math.Max(2, radius / 4), visual.Accent);
-
-        int labelHeight = Math.Max(14, size / 4);
-        canvas.DrawText(visual.Label, 0, canvas.Height - labelHeight - (size / 12), canvas.Width, labelHeight,
-            visual.Accent, size / 6f, bold: true);
+        int boxWidth = (int)Math.Round(DiscordButtonLayouts.CaptionBoxWidth * scale);
+        int boxHeight = (int)Math.Round(DiscordButtonLayouts.CaptionBoxHeight * scale);
+        int boxY = ((canvas.Height - boxHeight) / 2) + (int)Math.Round(DiscordButtonLayouts.CaptionOffsetY * scale);
+        canvas.DrawText(ctx.Host.Tr(visual.Caption), (canvas.Width - boxWidth) / 2, boxY, boxWidth, boxHeight,
+            visual.Color, (float)(DiscordButtonLayouts.CaptionSize * scale));
 
         return true;
     }

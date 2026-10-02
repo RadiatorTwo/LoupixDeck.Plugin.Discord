@@ -64,7 +64,8 @@ internal sealed class JoinVoiceChannelCommand(IDiscordRpc rpc, GuildDirectory gu
         CommandName = Name,
         DisplayName = "Discord: Join Voice Channel",
         Group = "Discord",
-        Icon = "\U000F05CB",
+        Icon = DiscordButtonLayouts.JoinCall,
+        ButtonLayout = DiscordButtonLayouts.IconWithCaption(DiscordButtonLayouts.JoinCall, "Join"),
         Description = "Joins a voice channel. With 'force', moves you even if you are already in another channel",
         HiddenFromMenu = true,
         ParameterTemplate = "({channelId},{force})",
@@ -111,7 +112,8 @@ internal sealed class LeaveVoiceChannelCommand(IDiscordRpc rpc, VoiceStateTracke
         CommandName = Name,
         DisplayName = "Discord: Leave Voice Channel",
         Group = "Discord",
-        Icon = "\U000F03FF",
+        Icon = DiscordButtonLayouts.LeaveCall,
+        ButtonLayout = DiscordButtonLayouts.IconWithCaption(DiscordButtonLayouts.LeaveCall, "Leave"),
         Description = "Leaves the current voice channel"
     };
 
@@ -147,7 +149,8 @@ internal sealed class CurrentVoiceChannelCommand(IDiscordRpc rpc, VoiceStateTrac
         CommandName = Name,
         DisplayName = "Discord: Current Voice Channel",
         Group = "Discord",
-        Icon = "\U000F05CB",
+        Icon = DiscordButtonLayouts.Group,
+        ButtonLayout = DiscordButtonLayouts.IconWithCaption(DiscordButtonLayouts.Group, "Voice Channel", tall: true),
         Description = "Shows the voice channel you are in and how many people are there"
     };
 
@@ -191,7 +194,8 @@ internal sealed class SpeakingCommand(IDiscordRpc rpc, VoiceStateTracker tracker
         CommandName = Name,
         DisplayName = "Discord: Who Is Speaking",
         Group = "Discord",
-        Icon = "\U000F05CB",
+        Icon = DiscordButtonLayouts.UserVoice,
+        ButtonLayout = DiscordButtonLayouts.IconWithCaption(DiscordButtonLayouts.UserVoice, "Speaking", tall: true),
         Description = "Shows who is speaking in your voice channel"
     };
 

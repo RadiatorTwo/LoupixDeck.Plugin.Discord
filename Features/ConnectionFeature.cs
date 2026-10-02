@@ -18,7 +18,8 @@ internal sealed class ConnectionStatusCommand(DiscordSession session) : IDisplay
         CommandName = "Discord.ConnectionStatus",
         DisplayName = "Discord: Connection Status",
         Group = "Discord",
-        Icon = "\U000F066F",
+        Icon = DiscordButtonLayouts.Connection,
+        ButtonLayout = DiscordButtonLayouts.IconWithCaption(DiscordButtonLayouts.Connection, "Discord", tall: true),
         Description = "Shows whether the plugin is connected to Discord; press to reconnect"
     };
 
