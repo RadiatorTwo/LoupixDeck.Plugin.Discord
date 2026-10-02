@@ -84,7 +84,7 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
             new UserVoiceFeature(session, voice, host),
             new VoiceChannelFeature(session, voice, guilds, host),
             new TextChannelFeature(session, guilds),
-            new SoundboardFeature(session, voice, host.Logger)
+            new SoundboardFeature(session, voice, guilds, host.Logger)
         ];
     }
 

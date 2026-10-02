@@ -7,7 +7,18 @@ using LoupixDeck.PluginSdk;
 namespace LoupixDeck.Plugin.Discord.Features;
 
 /// <summary>A soundboard sound (Soundboard docs, "Soundboard Sound Object").</summary>
-internal sealed record SoundboardSound(string SoundId, string Name, string? EmojiName, string? GuildId);
+internal sealed record SoundboardSound(string SoundId, string Name, string? EmojiName, string? GuildId)
+{
+    /// <summary>Parses one sound object; shared by the RPC reply and the REST route.</summary>
+    public static SoundboardSound? Parse(JsonElement sound)
+    {
+        string? id = DiscordRpcClient.GetString(sound, "sound_id");
+        if (id == null) return null;
+
+        return new SoundboardSound(id, DiscordRpcClient.GetString(sound, "name") ?? id,
+            DiscordRpcClient.GetString(sound, "emoji_name"), DiscordRpcClient.GetString(sound, "guild_id"));
+    }
+}
 
 /// <summary>Plays a soundboard sound in the voice channel the user is in.</summary>
 internal interface ISoundboardPlayer
@@ -24,48 +35,61 @@ internal interface ISoundboardCatalog
 }
 
 /// <summary>
-/// Playing soundboard sounds over RPC. <b>Not documented by Discord</b> — the RPC docs list no
-/// soundboard command, so nothing is guessed here.
+/// Plays a sound with the RPC command <c>PLAY_SOUNDBOARD_SOUND</c>.
 /// </summary>
 /// <remarks>
-/// TODO(soundboard): find the real command with the "Log RPC traffic" setting enabled, then
-/// <list type="number">
-///   <item>set <see cref="PlayCommand"/> to the command name,</item>
-///   <item>fill <see cref="BuildArgs"/> with the observed argument names,</item>
-///   <item>add the scope it needs to <see cref="SoundboardFeature.RequiredScopes"/> if Discord rejects it with 4006.</item>
-/// </list>
-/// The documented REST route <c>POST /channels/{channel.id}/send-soundboard-sound</c> is not an
-/// option: the docs only describe it for bot authentication, and user tokens must not be used.
+/// <b>Not in Discord's RPC docs.</b> The command name and the argument keys <c>sound_id</c> and
+/// <c>guild_id</c> come from the official Elgato Stream Deck Discord plugin (2.4.0), which uses
+/// them over the same IPC interface. The exact argument set is inferred from the strings in that
+/// plugin; verify with the RPC tester in the settings if Discord rejects the call.
 /// </remarks>
 internal sealed class RpcSoundboardPlayer(IDiscordRpc rpc) : ISoundboardPlayer
 {
-    // TODO(soundboard): the RPC command that plays a sound; null while unknown.
-    private static readonly string? PlayCommand = null;
+    public const string PlayCommand = "PLAY_SOUNDBOARD_SOUND";
 
-    public bool IsSupported => PlayCommand != null;
+    public bool IsSupported => true;
 
     public async Task PlayAsync(SoundboardSound sound, CancellationToken ct)
     {
-        if (PlayCommand is not string command)
-            throw new NotSupportedException("Playing soundboard sounds over RPC is not documented.");
+        JsonObject args = new() { ["sound_id"] = sound.SoundId };
+        // Built-in sounds have no server; sending an empty guild_id would make them a different sound.
+        if (!string.IsNullOrEmpty(sound.GuildId))
+            args["guild_id"] = sound.GuildId;
 
-        await rpc.CommandAsync(command, BuildArgs(sound), ct: ct).ConfigureAwait(false);
+        await rpc.CommandAsync(PlayCommand, args, ct: ct).ConfigureAwait(false);
     }
+}
 
-    private static JsonObject BuildArgs(SoundboardSound sound) =>
-        // TODO(soundboard): replace with the argument names observed in the debug log.
-        throw new NotImplementedException($"Arguments for playing sound {sound.SoundId} are not known yet.");
+/// <summary>
+/// All sounds the user can play — built-in and from their servers — via the RPC command
+/// <c>GET_SOUNDBOARD_SOUNDS</c> (undocumented, see <see cref="RpcSoundboardPlayer"/>).
+/// </summary>
+/// <remarks>
+/// The reply's shape is not documented either: both a plain array and an object with a
+/// <c>sounds</c> array are accepted.
+/// </remarks>
+internal sealed class RpcSoundboardCatalog(IDiscordRpc rpc) : ISoundboardCatalog
+{
+    public async Task<IReadOnlyList<SoundboardSound>> GetSoundsAsync(CancellationToken ct)
+    {
+        JsonElement data = await rpc.CommandAsync("GET_SOUNDBOARD_SOUNDS", ct: ct).ConfigureAwait(false);
+
+        JsonElement list = data.ValueKind == JsonValueKind.Array
+            ? data
+            : data.ValueKind == JsonValueKind.Object && data.TryGetProperty("sounds", out JsonElement sounds)
+                ? sounds
+                : default;
+
+        if (list.ValueKind != JsonValueKind.Array) return [];
+        return list.EnumerateArray().Select(SoundboardSound.Parse).OfType<SoundboardSound>().ToList();
+    }
 }
 
 /// <summary>
 /// Discord's built-in sounds via the documented REST route <c>GET /soundboard-default-sounds</c>
-/// ("soundboard sound objects that can be used by all users"); no token is sent.
+/// ("soundboard sound objects that can be used by all users"); no token is sent. Fallback for when
+/// <see cref="RpcSoundboardCatalog"/> fails.
 /// </summary>
-/// <remarks>
-/// TODO(soundboard): server sounds (<c>GET /guilds/{guild.id}/soundboard-sounds</c>) are documented
-/// for bot authentication only. Add them here once a supported way for user apps is known
-/// (an RPC command seen in the debug log, for instance).
-/// </remarks>
 internal sealed class DefaultSoundsCatalog : ISoundboardCatalog
 {
     private const string Endpoint = "https://discord.com/api/v10/soundboard-default-sounds";
@@ -81,78 +105,95 @@ internal sealed class DefaultSoundsCatalog : ISoundboardCatalog
         using JsonDocument doc = await JsonDocument.ParseAsync(body, cancellationToken: ct).ConfigureAwait(false);
         if (doc.RootElement.ValueKind != JsonValueKind.Array) return [];
 
-        List<SoundboardSound> sounds = [];
-        foreach (JsonElement sound in doc.RootElement.EnumerateArray())
-        {
-            string? id = DiscordRpcClient.GetString(sound, "sound_id");
-            if (id == null) continue;
-
-            sounds.Add(new SoundboardSound(id, DiscordRpcClient.GetString(sound, "name") ?? id,
-                DiscordRpcClient.GetString(sound, "emoji_name"), DiscordRpcClient.GetString(sound, "guild_id")));
-        }
-
-        return sounds;
+        return doc.RootElement.EnumerateArray().Select(SoundboardSound.Parse).OfType<SoundboardSound>().ToList();
     }
 }
 
-/// <summary>
-/// Soundboard buttons. Hidden until <see cref="ISoundboardPlayer.IsSupported"/> — the menu only
-/// offers sounds once playing them actually works.
-/// </summary>
+/// <summary>Soundboard buttons: sounds are picked in the menu, grouped by server.</summary>
 internal sealed class SoundboardFeature : IDiscordFeature, IDisposable
 {
     private readonly IDiscordRpc _rpc;
+    private readonly GuildDirectory _guilds;
     private readonly ISoundboardPlayer _player;
     private readonly ISoundboardCatalog _catalog;
+    private readonly ISoundboardCatalog _fallbackCatalog = new DefaultSoundsCatalog();
     private readonly IPluginLogger _logger;
     private IReadOnlyList<SoundboardSound> _sounds = [];
 
-    public SoundboardFeature(IDiscordRpc rpc, VoiceStateTracker tracker, IPluginLogger logger)
+    public SoundboardFeature(IDiscordRpc rpc, VoiceStateTracker tracker, GuildDirectory guilds, IPluginLogger logger)
     {
         _rpc = rpc;
+        _guilds = guilds;
         _logger = logger;
         _player = new RpcSoundboardPlayer(rpc);
-        _catalog = new DefaultSoundsCatalog();
+        _catalog = new RpcSoundboardCatalog(rpc);
         Commands = [new PlaySoundboardSoundCommand(_player, tracker, () => _sounds)];
 
         rpc.Authenticated += LoadSoundsInBackground;
     }
 
-    // TODO(soundboard): add the scope the play command needs once it is known.
-    public IReadOnlyCollection<string> RequiredScopes => [];
+    // The Elgato plugin requests no soundboard-specific scope; playing happens in the voice
+    // channel, so the voice scopes are requested to be safe.
+    public IReadOnlyCollection<string> RequiredScopes => [.. VoiceStateTracker.Scopes, "rpc.voice.write"];
 
     public IEnumerable<IPluginCommand> Commands { get; }
 
     public IEnumerable<MenuNode> GetMenuNodes(ButtonTargets target)
     {
-        if (!_player.IsSupported || _sounds.Count == 0) return [];
+        IReadOnlyList<SoundboardSound> sounds = _sounds;
+        if (sounds.Count == 0)
+        {
+            // New servers or sounds since the last load: refresh for the next time the menu opens.
+            if (_rpc.IsReady) LoadSoundsInBackground();
+            return [];
+        }
 
-        List<MenuNode> sounds = _sounds
-            .Select(s => new MenuNode
+        List<MenuNode> groups = sounds
+            .GroupBy(s => s.GuildId ?? string.Empty)
+            .Select(g => new MenuNode
             {
-                Name = string.IsNullOrEmpty(s.EmojiName) ? s.Name : $"{s.EmojiName} {s.Name}",
-                CommandName = PlaySoundboardSoundCommand.Name,
-                Parameters = new Dictionary<string, string>
-                {
-                    ["soundId"] = s.SoundId,
-                    ["guildId"] = s.GuildId ?? string.Empty
-                }
+                Name = GroupName(g.Key),
+                Children = g.Select(ToNode).ToList()
             })
+            .OrderBy(n => n.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
-        return [new MenuNode { Name = "Soundboard", Children = sounds }];
+        // A single group needs no extra folder level.
+        IReadOnlyList<MenuNode> children = groups.Count == 1 ? groups[0].Children : groups;
+        return [new MenuNode { Name = "Soundboard", Children = children }];
     }
 
-    private void LoadSoundsInBackground()
+    private string GroupName(string guildId) =>
+        guildId.Length == 0
+            ? "Discord"
+            : _guilds.Guilds.FirstOrDefault(g => g.Id == guildId)?.Name ?? guildId;
+
+    private static MenuNode ToNode(SoundboardSound s) => new()
     {
-        if (!_player.IsSupported) return;
-
-        _ = Task.Run(async () =>
+        Name = string.IsNullOrEmpty(s.EmojiName) ? s.Name : $"{s.EmojiName} {s.Name}",
+        CommandName = PlaySoundboardSoundCommand.Name,
+        Parameters = new Dictionary<string, string>
         {
-            try { _sounds = await _catalog.GetSoundsAsync(CancellationToken.None).ConfigureAwait(false); }
-            catch (Exception ex) { _logger.Warn($"Loading Discord soundboard sounds failed: {ex.Message}"); }
-        });
-    }
+            ["soundId"] = s.SoundId,
+            ["guildId"] = s.GuildId ?? string.Empty
+        }
+    };
+
+    private void LoadSoundsInBackground() => _ = Task.Run(async () =>
+    {
+        try
+        {
+            _sounds = await _catalog.GetSoundsAsync(CancellationToken.None).ConfigureAwait(false);
+            return;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"GET_SOUNDBOARD_SOUNDS failed ({ex.Message}); falling back to the built-in sounds.");
+        }
+
+        try { _sounds = await _fallbackCatalog.GetSoundsAsync(CancellationToken.None).ConfigureAwait(false); }
+        catch (Exception ex) { _logger.Warn($"Loading Discord soundboard sounds failed: {ex.Message}"); }
+    });
 
     public void Dispose() => _rpc.Authenticated -= LoadSoundsInBackground;
 }
@@ -189,21 +230,16 @@ internal sealed class PlaySoundboardSoundCommand(
 
         try
         {
-            if (!player.IsSupported)
-            {
-                ctx.Host.Logger.Warn($"{Name}: playing soundboard sounds is not implemented (undocumented RPC command).");
-                CommandFeedback.Show(ctx, ctx.Host.Tr("Soundboard is not supported yet"));
-                return;
-            }
-
             if (tracker.Channel == null)
             {
                 CommandFeedback.Show(ctx, ctx.Host.Tr(RpcErrorMapper.NotInVoiceChannel));
                 return;
             }
 
-            string? guildId = ctx.Parameters.Length > 1 && ctx.Parameters[1].Length > 0 ? ctx.Parameters[1].Trim() : null;
-            SoundboardSound sound = sounds().FirstOrDefault(s => s.SoundId == soundId)
+            string? guildId = ctx.Parameters.Length > 1 && ctx.Parameters[1].Trim().Length > 0
+                ? ctx.Parameters[1].Trim()
+                : null;
+            SoundboardSound sound = sounds().FirstOrDefault(s => s.SoundId == soundId && s.GuildId == guildId)
                                     ?? new SoundboardSound(soundId, soundId, null, guildId);
             await player.PlayAsync(sound, CancellationToken.None).ConfigureAwait(false);
         }

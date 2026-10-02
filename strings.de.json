@@ -97,7 +97,6 @@
   "No voice channel": "Kein Sprachkanal",
   "Joined": "Beigetreten",
   "User is not in your voice channel": "Nutzer ist nicht in deinem Sprachkanal",
-  "Soundboard is not supported yet": "Soundboard wird noch nicht unterstützt",
   "RPC tester: command": "RPC-Tester: Befehl",
   "Any RPC command, e.g. GET_VOICE_SETTINGS. Save, then press \"Send RPC command\". Error 4002 means the command does not exist": "Beliebiger RPC-Befehl, z. B. GET_VOICE_SETTINGS. Speichern, dann „RPC-Befehl senden“ klicken. Fehler 4002 bedeutet: den Befehl gibt es nicht",
   "RPC tester: arguments (JSON)": "RPC-Tester: Argumente (JSON)",

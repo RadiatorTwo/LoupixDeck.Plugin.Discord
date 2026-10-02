@@ -87,10 +87,10 @@ RPC docs, "Restrictions").
 | `Discord.CurrentVoiceChannel` | – | Shows your voice channel and how many people are in it. |
 | `Discord.Speaking` | – | Shows who is speaking in your voice channel. |
 | `Discord.OpenTextChannel` | `channelId` | Switch the Discord app to a text channel. |
-| `Discord.PlaySoundboardSound` | `soundId`, `guildId` | Not functional yet — see [Undocumented features](#undocumented-features). |
+| `Discord.PlaySoundboardSound` | `soundId`, `guildId` | Play a soundboard sound in your voice channel (undocumented RPC, see below). |
 
 Servers, channels and users are picked in the command menu under **Discord ▸** (*Join voice
-channel*, *Open text channel*, *Users in voice channel*). The lists come from Discord and need an
+channel*, *Open text channel*, *Users in voice channel*, *Soundboard*). The lists come from Discord and need an
 active connection.
 
 ## Settings
@@ -130,12 +130,19 @@ If the feature needs a new scope, existing users see *New permissions needed* an
 
 ### Undocumented features
 
-Nothing undocumented is guessed. Places marked `TODO(...)` wait for real values, found with
-**Log RPC traffic** enabled:
+Discord's RPC docs do not cover the soundboard. The plugin uses the commands the official Elgato
+Stream Deck Discord plugin (2.4.0) uses over the same IPC interface:
 
-- `TODO(soundboard)` in `Features/SoundboardFeature.cs` — the RPC command (and arguments,
-  scope) that plays a soundboard sound. The built-in sound list already uses the documented
-  `GET /soundboard-default-sounds`; server sounds are documented for bots only.
+| Command | Arguments | Used for |
+|---|---|---|
+| `GET_SOUNDBOARD_SOUNDS` | – | All sounds you can play (built-in and from your servers). Falls back to the documented `GET /soundboard-default-sounds` if it fails. |
+| `PLAY_SOUNDBOARD_SOUND` | `sound_id`, `guild_id` (omitted for built-in sounds) | Playing a sound. |
+
+The argument set is inferred from strings in that plugin, not from documentation. Check with the
+RPC tester if Discord rejects it.
+
+Still open, marked `TODO(...)`:
+
 - `TODO(voice-lock)` in `Rpc/RpcErrorMapper.cs` — the error Discord returns when another app
   holds the voice settings lock.
 - `TODO(rpc-errors)` in `Rpc/RpcErrorMapper.cs` — the errors for a declined popup and for an
