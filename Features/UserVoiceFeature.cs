@@ -39,8 +39,16 @@ internal sealed class UserVoiceFeature : IDiscordFeature, IDisposable
 
     public IEnumerable<MenuNode> GetMenuNodes(ButtonTargets target)
     {
-        List<VoiceMember> others = _tracker.Members.Where(m => m.UserId != _rpc.CurrentUserId).ToList();
-        if (others.Count == 0) return [];
+        List<VoiceMember> others = OtherMembers();
+        if (others.Count == 0)
+        {
+            // Always show the folder, so the user learns where these commands live and why it is
+            // empty. A node without a command is ignored when picked.
+            string hint = _rpc.IsReady
+                ? _host.Tr("Join a voice channel with other people to pick someone")
+                : _host.Tr(RpcErrorMapper.NotConnected);
+            return [new MenuNode { Name = "Users in voice channel", Children = [new MenuNode { Name = hint, CommandName = string.Empty }] }];
+        }
 
         // A dial gets the volume control, a button the local mute.
         string commandName = target.HasFlag(ButtonTargets.RotaryEncoder) ? UserVolumeCommand.Name : UserMuteCommand.Name;
@@ -55,6 +63,15 @@ internal sealed class UserVoiceFeature : IDiscordFeature, IDisposable
 
         return [new MenuNode { Name = "Users in voice channel", Children = users }];
     }
+
+    /// <summary>One volume dial per person in your voice channel.</summary>
+    public IEnumerable<DialPresetDescriptor> GetDialPresets() =>
+        OtherMembers().Select(m => DiscordButtonLayouts.AdjustmentPreset(
+            $"discord-user-{m.UserId}", $"Discord: {m.DisplayName}", DiscordButtonLayouts.UserVoice,
+            UserVolumeCommand.Name, new Dictionary<string, string> { ["userId"] = m.UserId }));
+
+    private List<VoiceMember> OtherMembers() =>
+        _tracker.Members.Where(m => m.UserId != _rpc.CurrentUserId).ToList();
 
     private void OnVoiceChanged(VoiceChange change)
     {

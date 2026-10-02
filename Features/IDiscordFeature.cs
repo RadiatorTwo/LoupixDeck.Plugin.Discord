@@ -36,4 +36,10 @@ internal interface IDiscordFeature
     /// lists from Discord. Bounded by <paramref name="ct"/>; on timeout the old cache is shown.
     /// </summary>
     Task RefreshForMenuAsync(CancellationToken ct) => Task.CompletedTask;
+
+    /// <summary>
+    /// Ready-made dial configurations offered in the rotary editor. Called synchronously and
+    /// untimed by the host, so answer from cached data only.
+    /// </summary>
+    IEnumerable<DialPresetDescriptor> GetDialPresets() => [];
 }

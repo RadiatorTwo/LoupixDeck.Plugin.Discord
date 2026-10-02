@@ -134,5 +134,8 @@
   "Leave": "Salir",
   "Voice Channel": "Canal de voz",
   "Speaking": "Hablando",
-  "Text Channel": "Canal de texto"
+  "Text Channel": "Canal de texto",
+  "Join a voice channel with other people to pick someone": "Únete a un canal de voz con otras personas para elegir a alguien",
+  "Discord microphone volume": "Volumen del micrófono de Discord",
+  "Discord output volume": "Volumen de salida de Discord"
 }

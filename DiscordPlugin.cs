@@ -119,6 +119,18 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
         }
     ];
 
+    public override IEnumerable<DialPresetDescriptor> GetDialPresets()
+    {
+        List<DialPresetDescriptor> presets = [];
+        foreach (IDiscordFeature feature in _features)
+        {
+            try { presets.AddRange(feature.GetDialPresets()); }
+            catch (Exception ex) { _host?.Logger.Warn($"Discord dial presets failed: {ex.Message}"); }
+        }
+
+        return presets;
+    }
+
     public override void Shutdown()
     {
         foreach (IDisposable disposable in _disposables)

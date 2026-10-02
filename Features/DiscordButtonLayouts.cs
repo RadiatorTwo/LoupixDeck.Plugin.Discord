@@ -83,6 +83,33 @@ internal static class DiscordButtonLayouts
         ]
     };
 
+    /// <summary>
+    /// A dial preset that puts one adjustment command on all three actions: turning adjusts, the
+    /// press runs the command's reset (mute / deafen).
+    /// </summary>
+    public static DialPresetDescriptor AdjustmentPreset(string id, string name, string glyph, string commandName,
+        IReadOnlyDictionary<string, string>? parameters = null)
+    {
+        MenuCommandRef command = new()
+        {
+            CommandName = commandName,
+            Parameters = parameters ?? new Dictionary<string, string>()
+        };
+
+        return new DialPresetDescriptor
+        {
+            Id = id,
+            Name = name,
+            Glyph = glyph,
+            Actions = new Dictionary<RotaryAction, MenuCommandRef>
+            {
+                [RotaryAction.CounterClockwise] = command,
+                [RotaryAction.Clockwise] = command,
+                [RotaryAction.Press] = command
+            }
+        };
+    }
+
     /// <summary>For commands that draw the whole key per state: no static layers underneath.</summary>
     public static ButtonLayoutDescriptor DrawnByCommand { get; } = new() { Mode = ButtonLayoutMode.None };
 }

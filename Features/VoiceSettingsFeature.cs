@@ -40,6 +40,14 @@ internal sealed class VoiceSettingsFeature : IDiscordFeature, IDisposable
 
     public IEnumerable<IPluginCommand> Commands { get; }
 
+    public IEnumerable<DialPresetDescriptor> GetDialPresets() =>
+    [
+        DiscordButtonLayouts.AdjustmentPreset("discord-input-volume", "Discord microphone volume",
+            DiscordButtonLayouts.Microphone, VoiceVolumeCommand.InputName),
+        DiscordButtonLayouts.AdjustmentPreset("discord-output-volume", "Discord output volume",
+            DiscordButtonLayouts.VolumeHigh, VoiceVolumeCommand.OutputName)
+    ];
+
     private void OnVoiceChanged(VoiceChange change)
     {
         if (!change.HasFlag(VoiceChange.Settings) || _tracker.Settings is not VoiceSettingsSnapshot settings)
