@@ -15,7 +15,8 @@ internal sealed class GuildDirectory : IDisposable
     private readonly IDiscordRpc _rpc;
     private readonly IPluginLogger _logger;
     private readonly List<IDisposable> _subscriptions = [];
-    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    private readonly Lock _gate = new();
+    private Task? _refresh;
     private IReadOnlyList<GuildEntry> _guilds = [];
 
     public GuildDirectory(IDiscordRpc rpc, IPluginLogger logger)
@@ -61,40 +62,51 @@ internal sealed class GuildDirectory : IDisposable
 
     private void OnConnectionLost() => _guilds = [];
 
-    private void RefreshInBackground() => _ = Task.Run(RefreshAsync);
+    private void RefreshInBackground() => _ = RefreshAsync(CancellationToken.None);
 
-    private async Task RefreshAsync()
+    /// <summary>
+    /// Reloads servers and channels. Callers arriving while a refresh runs share it, so several
+    /// features asking at once (menu build) cost one round of requests. <paramref name="ct"/> only
+    /// bounds the caller's wait; the shared refresh finishes and updates the cache regardless.
+    /// </summary>
+    public Task RefreshAsync(CancellationToken ct)
     {
-        // Coalesce bursts (several CHANNEL_CREATE in a row): a waiting refresh covers them all.
-        if (!await _refreshLock.WaitAsync(0).ConfigureAwait(false))
-            return;
+        Task refresh;
+        lock (_gate)
+        {
+            if (_refresh == null || _refresh.IsCompleted)
+                _refresh = Task.Run(LoadAsync);
+            refresh = _refresh;
+        }
 
+        return refresh.WaitAsync(ct);
+    }
+
+    private async Task LoadAsync()
+    {
         try
         {
             JsonElement data = await _rpc.CommandAsync("GET_GUILDS").ConfigureAwait(false);
-            List<GuildEntry> guilds = [];
+            if (!data.TryGetProperty("guilds", out JsonElement list) || list.ValueKind != JsonValueKind.Array)
+                return;
 
-            if (data.TryGetProperty("guilds", out JsonElement list) && list.ValueKind == JsonValueKind.Array)
+            List<(string Id, string Name)> guilds = [];
+            foreach (JsonElement guild in list.EnumerateArray())
             {
-                foreach (JsonElement guild in list.EnumerateArray())
-                {
-                    string? id = DiscordRpcClient.GetString(guild, "id");
-                    if (id == null) continue;
-
-                    guilds.Add(new GuildEntry(id, DiscordRpcClient.GetString(guild, "name") ?? id,
-                        await LoadChannelsAsync(id).ConfigureAwait(false)));
-                }
+                if (DiscordRpcClient.GetString(guild, "id") is string id)
+                    guilds.Add((id, DiscordRpcClient.GetString(guild, "name") ?? id));
             }
 
-            _guilds = guilds;
+            // Channels of all servers in parallel; one round-trip per server is the slow part.
+            IReadOnlyList<ChannelEntry>[] channels =
+                await Task.WhenAll(guilds.Select(g => LoadChannelsAsync(g.Id))).ConfigureAwait(false);
+
+            _guilds = guilds.Select((g, i) => new GuildEntry(g.Id, g.Name, channels[i])).ToList();
         }
         catch (Exception ex)
         {
+            // Keep the previous lists; a failed refresh must not empty the pickers.
             _logger.Warn($"Loading Discord servers failed: {ex.Message}");
-        }
-        finally
-        {
-            _refreshLock.Release();
         }
     }
 

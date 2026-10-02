@@ -36,6 +36,8 @@ internal sealed class VoiceChannelFeature : IDiscordFeature, IDisposable
 
     public IEnumerable<IPluginCommand> Commands { get; }
 
+    public Task RefreshForMenuAsync(CancellationToken ct) => _guilds.RefreshAsync(ct);
+
     public IEnumerable<MenuNode> GetMenuNodes(ButtonTargets target)
     {
         List<MenuNode> servers = _guilds.BuildChannelMenu(c => c.IsVoice, JoinVoiceChannelCommand.Name, "channelId");

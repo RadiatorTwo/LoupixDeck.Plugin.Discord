@@ -21,7 +21,7 @@ internal interface IDiscordFeature
 
     /// <summary>
     /// Entries for the plugin's branch of the command menu (channel pickers, user pickers, …).
-    /// Must answer from cached data; the host gives the whole menu 5 seconds.
+    /// Must answer from cached data — refresh it in <see cref="RefreshForMenuAsync"/>.
     /// </summary>
     IEnumerable<MenuNode> GetMenuNodes(ButtonTargets target) => [];
 

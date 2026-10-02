@@ -12,6 +12,8 @@ internal sealed class TextChannelFeature(IDiscordRpc rpc, GuildDirectory guilds)
 
     public IEnumerable<IPluginCommand> Commands { get; } = [new OpenTextChannelCommand(rpc)];
 
+    public Task RefreshForMenuAsync(CancellationToken ct) => guilds.RefreshAsync(ct);
+
     public IEnumerable<MenuNode> GetMenuNodes(ButtonTargets target)
     {
         List<MenuNode> servers = guilds.BuildChannelMenu(c => c.IsText, OpenTextChannelCommand.Name, "channelId");
