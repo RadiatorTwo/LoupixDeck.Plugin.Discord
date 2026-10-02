@@ -138,8 +138,8 @@ Stream Deck Discord plugin (2.4.0) uses over the same IPC interface:
 | `GET_SOUNDBOARD_SOUNDS` | – | All sounds you can play (built-in and from your servers). Falls back to the documented `GET /soundboard-default-sounds` if it fails. |
 | `PLAY_SOUNDBOARD_SOUND` | `sound_id`, `guild_id` (omitted for built-in sounds) | Playing a sound. |
 
-The argument set is inferred from strings in that plugin, not from documentation. Check with the
-RPC tester if Discord rejects it.
+Both were verified against the Discord client (October 2026). Being undocumented, they may change
+without notice; the RPC tester in the settings helps re-check them.
 
 Still open, marked `TODO(...)`:
 

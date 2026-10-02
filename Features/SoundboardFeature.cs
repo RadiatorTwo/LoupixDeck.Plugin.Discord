@@ -40,8 +40,8 @@ internal interface ISoundboardCatalog
 /// <remarks>
 /// <b>Not in Discord's RPC docs.</b> The command name and the argument keys <c>sound_id</c> and
 /// <c>guild_id</c> come from the official Elgato Stream Deck Discord plugin (2.4.0), which uses
-/// them over the same IPC interface. The exact argument set is inferred from the strings in that
-/// plugin; verify with the RPC tester in the settings if Discord rejects the call.
+/// them over the same IPC interface. Verified against the Discord client (October 2026); being
+/// undocumented, it may change without notice — the RPC tester in the settings helps re-check.
 /// </remarks>
 internal sealed class RpcSoundboardPlayer(IDiscordRpc rpc) : ISoundboardPlayer
 {
