@@ -15,6 +15,8 @@
     <PackageReference Include="LoupixDeck.PluginSdk" Version="1.28.0">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
+    <!-- DPAPI for the Windows secret store; only called on Windows. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
   </ItemGroup>
 
 </Project>

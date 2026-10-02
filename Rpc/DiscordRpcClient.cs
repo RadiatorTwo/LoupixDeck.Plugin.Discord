@@ -348,7 +348,7 @@ internal sealed class DiscordRpcClient : IAsyncDisposable
         }
     }
 
-    private static DiscordNotConnectedException NotConnected() => new("Discord is not connected.");
+    private static DiscordNotConnectedException NotConnected() => new(RpcErrorMapper.NotConnected);
 
     private void SetPhase(RpcConnectionPhase phase)
     {
