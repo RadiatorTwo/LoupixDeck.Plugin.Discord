@@ -115,8 +115,8 @@
   "Switches between voice activity and push to talk. 'On' means push to talk": "Wechselt zwischen Sprachaktivierung und Push-to-Talk. „An“ bedeutet Push-to-Talk",
   "Push to talk": "Push-to-Talk",
   "Voice activity": "Sprachaktivierung",
-  "Starts or stops sharing your screen in the voice channel": "Startet oder beendet die Bildschirmübertragung im Sprachkanal",
   "Turns your camera on or off in the voice channel": "Schaltet deine Kamera im Sprachkanal an oder aus",
   "Discord did not grant this permission": "Discord hat diese Berechtigung nicht erteilt",
-  "Confirm the permission in Discord": "Bestätige die Berechtigung in Discord"
+  "Confirm the permission in Discord": "Bestätige die Berechtigung in Discord",
+  "Starts or stops streaming in the voice channel — the detected game directly, otherwise Discord asks what to share": "Startet oder beendet den Stream im Sprachkanal – ein erkanntes Spiel direkt, sonst fragt Discord, was übertragen werden soll"
 }

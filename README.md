@@ -88,7 +88,7 @@ RPC docs, "Restrictions").
 | `Discord.CurrentVoiceChannel` | – | Shows your voice channel and how many people are in it. |
 | `Discord.Speaking` | – | Shows who is speaking in your voice channel. |
 | `Discord.OpenTextChannel` | `channelId` | Switch the Discord app to a text channel. |
-| `Discord.ToggleScreenshare` | – | Start/stop screen share (Go Live). Undocumented, see below. |
+| `Discord.ToggleScreenshare` | – | Start/stop streaming (Go Live). A game Discord detects (listed under **Registered Games**) is streamed directly; otherwise Discord shows its source picker. Undocumented, see below. |
 | `Discord.ToggleVideo` | – | Camera on/off. Undocumented, see below. |
 | `Discord.PlaySoundboardSound` | `soundId`, `guildId` | Play a soundboard sound in your voice channel (undocumented RPC, see below). |
 

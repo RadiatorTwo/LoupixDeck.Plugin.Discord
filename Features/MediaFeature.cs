@@ -136,7 +136,7 @@ internal sealed class MediaToggleCommand : DiscordStatefulCommand
             Group = "Discord",
             Icon = share ? "\U000F0379" : "\U000F0567",
             Description = share
-                ? "Starts or stops sharing your screen in the voice channel"
+                ? "Starts or stops streaming in the voice channel — the detected game directly, otherwise Discord asks what to share"
                 : "Turns your camera on or off in the voice channel",
             States = DiscordStates.Toggle
         };
