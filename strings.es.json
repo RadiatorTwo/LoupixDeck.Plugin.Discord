@@ -37,7 +37,6 @@
   "guildId": "ID de servidor",
   "Off": "Desactivado",
   "On": "Activado",
-  "Users in voice channel": "Usuarios en el canal de voz",
   "Join voice channel": "Unirse a canal de voz",
   "Open text channel": "Abrir canal de texto",
   "Soundboard": "Caja de sonidos",
@@ -135,7 +134,10 @@
   "Voice Channel": "Canal de voz",
   "Speaking": "Hablando",
   "Text Channel": "Canal de texto",
-  "Join a voice channel with other people to pick someone": "Únete a un canal de voz con otras personas para elegir a alguien",
   "Discord microphone volume": "Volumen del micrófono de Discord",
-  "Discord output volume": "Volumen de salida de Discord"
+  "Discord output volume": "Volumen de salida de Discord",
+  "Discord: Voice Channel Users": "Discord: Usuarios del canal de voz",
+  "Opens the people in your voice channel: tap to select, tap again to mute them for you, turn the first dial to change their volume": "Abre las personas de tu canal de voz: toca para seleccionar, toca de nuevo para silenciarlas para ti, gira el primer dial para cambiar su volumen",
+  "Users": "Usuarios",
+  "No one else is here": "No hay nadie más"
 }

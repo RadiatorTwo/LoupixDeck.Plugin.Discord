@@ -8,7 +8,8 @@ namespace LoupixDeck.Plugin.Discord.Features;
 
 /// <summary>
 /// Local volume and mute of other users (SET_USER_VOICE_SETTINGS). These only affect what you
-/// hear; the users are picked from the voice channel you are in.
+/// hear. The people are picked live from your voice channel in a folder
+/// (<see cref="VoiceUsersCommand"/>), or put on a dial through a dial preset.
 /// </summary>
 internal sealed class UserVoiceFeature : IDiscordFeature, IDisposable
 {
@@ -22,12 +23,12 @@ internal sealed class UserVoiceFeature : IDiscordFeature, IDisposable
         _tracker = tracker;
         _host = host;
 
-        // Volumes set for users who have left the channel since — their next adjustment builds on it.
-        ConcurrentDictionary<string, int> lastSet = new();
+        UserVoiceControl control = new(rpc, tracker);
         Commands =
         [
-            new UserVolumeCommand(rpc, tracker, lastSet),
-            new UserMuteCommand(rpc, tracker)
+            new VoiceUsersCommand(rpc, tracker, control),
+            new UserVolumeCommand(tracker, control),
+            new UserMuteCommand(control)
         ];
 
         tracker.Changed += OnVoiceChanged;
@@ -37,41 +38,13 @@ internal sealed class UserVoiceFeature : IDiscordFeature, IDisposable
 
     public IEnumerable<IPluginCommand> Commands { get; }
 
-    public IEnumerable<MenuNode> GetMenuNodes(ButtonTargets target)
-    {
-        List<VoiceMember> others = OtherMembers();
-        if (others.Count == 0)
-        {
-            // Always show the folder, so the user learns where these commands live and why it is
-            // empty. A node without a command is ignored when picked.
-            string hint = _rpc.IsReady
-                ? _host.Tr("Join a voice channel with other people to pick someone")
-                : _host.Tr(RpcErrorMapper.NotConnected);
-            return [new MenuNode { Name = "Users in voice channel", Children = [new MenuNode { Name = hint, CommandName = string.Empty }] }];
-        }
-
-        // A dial gets the volume control, a button the local mute.
-        string commandName = target.HasFlag(ButtonTargets.RotaryEncoder) ? UserVolumeCommand.Name : UserMuteCommand.Name;
-        List<MenuNode> users = others
-            .Select(m => new MenuNode
-            {
-                Name = m.DisplayName,
-                CommandName = commandName,
-                Parameters = new Dictionary<string, string> { ["userId"] = m.UserId }
-            })
-            .ToList();
-
-        return [new MenuNode { Name = "Users in voice channel", Children = users }];
-    }
-
     /// <summary>One volume dial per person in your voice channel.</summary>
     public IEnumerable<DialPresetDescriptor> GetDialPresets() =>
-        OtherMembers().Select(m => DiscordButtonLayouts.AdjustmentPreset(
-            $"discord-user-{m.UserId}", $"Discord: {m.DisplayName}", DiscordButtonLayouts.UserVoice,
-            UserVolumeCommand.Name, new Dictionary<string, string> { ["userId"] = m.UserId }));
-
-    private List<VoiceMember> OtherMembers() =>
-        _tracker.Members.Where(m => m.UserId != _rpc.CurrentUserId).ToList();
+        _tracker.Members
+            .Where(m => m.UserId != _rpc.CurrentUserId)
+            .Select(m => DiscordButtonLayouts.AdjustmentPreset(
+                $"discord-user-{m.UserId}", $"Discord: {m.DisplayName}", DiscordButtonLayouts.UserVoice,
+                UserVolumeCommand.Name, new Dictionary<string, string> { ["userId"] = m.UserId }));
 
     private void OnVoiceChanged(VoiceChange change)
     {
@@ -85,9 +58,93 @@ internal sealed class UserVoiceFeature : IDiscordFeature, IDisposable
         ctx.Parameters.Length > 0 && !string.IsNullOrWhiteSpace(ctx.Parameters[0]) ? ctx.Parameters[0].Trim() : null;
 }
 
+/// <summary>Volume and local mute of one user, shared by the commands and the folder.</summary>
+internal sealed class UserVoiceControl(IDiscordRpc rpc, VoiceStateTracker tracker)
+{
+    // Volumes set for users who have left the channel since: their next adjustment builds on it.
+    private readonly ConcurrentDictionary<string, int> _lastSet = new();
+
+    public int CurrentVolume(string userId) =>
+        _lastSet.TryGetValue(userId, out int known)
+            ? known
+            : tracker.FindMember(userId)?.Volume ?? VoiceMember.DefaultVolume;
+
+    /// <summary>Changes the volume by <paramref name="delta"/> percent points and returns the new value.</summary>
+    public async Task<int> AdjustAsync(string userId, int delta)
+    {
+        int next = Math.Clamp(CurrentVolume(userId) + delta, 0, VoiceMember.MaxVolume);
+
+        // Recorded before sending, so a fast turn continues from here instead of the stale cache.
+        _lastSet[userId] = next;
+        tracker.ApplyUserSettings(userId, next, null);
+
+        try
+        {
+            await rpc.CommandAsync("SET_USER_VOICE_SETTINGS",
+                new JsonObject { ["user_id"] = userId, ["volume"] = next }).ConfigureAwait(false);
+            return next;
+        }
+        catch
+        {
+            _lastSet.TryRemove(userId, out _);
+            throw;
+        }
+    }
+
+    /// <summary>Toggles the local mute; null when the user is not in your voice channel (state unknown).</summary>
+    public async Task<bool?> ToggleMuteAsync(string userId)
+    {
+        VoiceMember? member = tracker.FindMember(userId);
+        if (member == null) return null;
+
+        bool mute = !member.LocalMute;
+        await rpc.CommandAsync("SET_USER_VOICE_SETTINGS",
+            new JsonObject { ["user_id"] = userId, ["mute"] = mute }).ConfigureAwait(false);
+        tracker.ApplyUserSettings(userId, null, mute);
+        return mute;
+    }
+}
+
+/// <summary>Opens a live folder with the people in your voice channel.</summary>
+internal sealed class VoiceUsersCommand(IDiscordRpc rpc, VoiceStateTracker tracker, UserVoiceControl control)
+    : IPluginCommand
+{
+    public const string Name = "Discord.VoiceUsers";
+
+    public CommandDescriptor Descriptor { get; } = new()
+    {
+        CommandName = Name,
+        DisplayName = "Discord: Voice Channel Users",
+        Group = "Discord",
+        Icon = DiscordButtonLayouts.Group,
+        ButtonLayout = DiscordButtonLayouts.IconWithCaption(DiscordButtonLayouts.Group, "Users"),
+        Description = "Opens the people in your voice channel: tap to select, tap again to mute them for you, turn the first dial to change their volume"
+    };
+
+    public ButtonTargets SupportedTargets => ButtonTargets.TouchButton | ButtonTargets.SimpleButton;
+
+    public Task Execute(CommandContext ctx)
+    {
+        try
+        {
+            if (!rpc.IsReady)
+                CommandFeedback.Show(ctx, ctx.Host.Tr(RpcErrorMapper.NotConnected));
+            else if (tracker.Channel == null)
+                CommandFeedback.Show(ctx, ctx.Host.Tr(RpcErrorMapper.NotInVoiceChannel));
+            else
+                ctx.Host.OpenFolder(new VoiceUsersFolderProvider(rpc, tracker, control, ctx.Host));
+        }
+        catch (Exception ex)
+        {
+            ctx.Host.Logger.Error($"{Name} failed", ex);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>Turn to change a user's local volume (0–200 %), press to mute them locally.</summary>
-internal sealed class UserVolumeCommand(IDiscordRpc rpc, VoiceStateTracker tracker,
-    ConcurrentDictionary<string, int> lastSet) : IAdjustmentCommand
+internal sealed class UserVolumeCommand(VoiceStateTracker tracker, UserVoiceControl control) : IAdjustmentCommand
 {
     public const string Name = "Discord.UserVolume";
 
@@ -114,29 +171,18 @@ internal sealed class UserVolumeCommand(IDiscordRpc rpc, VoiceStateTracker track
         if (UserVoiceFeature.UserId(ctx) is not string userId) return;
 
         int step = ctx.Parameters.Length > 1 && int.TryParse(ctx.Parameters[1], out int s) && s > 0 ? s : 10;
-        int current = lastSet.TryGetValue(userId, out int known)
-            ? known
-            : tracker.FindMember(userId)?.Volume ?? VoiceMember.DefaultVolume;
-        int next = Math.Clamp(current + (ticks * step), 0, VoiceMember.MaxVolume);
-
-        // Recorded before sending, so a fast turn continues from here instead of the stale cache.
-        lastSet[userId] = next;
-        tracker.ApplyUserSettings(userId, next, null);
-
         try
         {
-            await rpc.CommandAsync("SET_USER_VOICE_SETTINGS",
-                new JsonObject { ["user_id"] = userId, ["volume"] = next }).ConfigureAwait(false);
-            CommandFeedback.Show(ctx, $"{MemberName(userId)} {next}%");
+            int next = await control.AdjustAsync(userId, ticks * step).ConfigureAwait(false);
+            CommandFeedback.Show(ctx, $"{tracker.FindMember(userId)?.DisplayName} {next}%".Trim());
         }
         catch (Exception ex)
         {
-            lastSet.TryRemove(userId, out _);
             CommandFeedback.ShowError(ctx, Name, ex, RpcErrorContext.VoiceSettingsWrite);
         }
     }
 
-    public Task ApplyReset(CommandContext ctx) => UserMuteCommand.ToggleAsync(ctx, rpc, tracker, Name);
+    public Task ApplyReset(CommandContext ctx) => UserMuteCommand.ToggleAsync(ctx, control, Name);
 
     public Task Execute(CommandContext ctx) => ApplyReset(ctx);
 
@@ -144,17 +190,14 @@ internal sealed class UserVolumeCommand(IDiscordRpc rpc, VoiceStateTracker track
     {
         if (UserVoiceFeature.UserId(ctx) is not string userId) return null;
 
-        VoiceMember? member = tracker.FindMember(userId);
-        int volume = member?.Volume ?? (lastSet.TryGetValue(userId, out int known) ? known : VoiceMember.DefaultVolume);
-        string text = member?.LocalMute == true ? "🔇" : $"{volume}%";
+        int volume = control.CurrentVolume(userId);
+        string text = tracker.FindMember(userId)?.LocalMute == true ? "🔇" : $"{volume}%";
         return new AdjustmentValue((double)volume / VoiceMember.MaxVolume, text);
     }
-
-    private string MemberName(string userId) => tracker.FindMember(userId)?.DisplayName ?? string.Empty;
 }
 
-/// <summary>Mutes or unmutes a user for you only.</summary>
-internal sealed class UserMuteCommand(IDiscordRpc rpc, VoiceStateTracker tracker) : IPluginCommand
+/// <summary>Mutes or unmutes a user for you only (for macros and the command line; the folder covers buttons).</summary>
+internal sealed class UserMuteCommand(UserVoiceControl control) : IPluginCommand
 {
     public const string Name = "Discord.UserMute";
 
@@ -173,28 +216,23 @@ internal sealed class UserMuteCommand(IDiscordRpc rpc, VoiceStateTracker tracker
 
     public ButtonTargets SupportedTargets => ButtonTargets.All;
 
-    public Task Execute(CommandContext ctx) => ToggleAsync(ctx, rpc, tracker, Name);
+    public Task Execute(CommandContext ctx) => ToggleAsync(ctx, control, Name);
 
-    internal static async Task ToggleAsync(CommandContext ctx, IDiscordRpc rpc, VoiceStateTracker tracker,
-        string commandName)
+    internal static async Task ToggleAsync(CommandContext ctx, UserVoiceControl control, string commandName)
     {
         if (UserVoiceFeature.UserId(ctx) is not string userId) return;
 
         try
         {
-            VoiceMember? member = tracker.FindMember(userId);
-            if (member == null)
+            bool? mute = await control.ToggleMuteAsync(userId).ConfigureAwait(false);
+            if (mute == null)
             {
                 // The current local mute is only known for users in your voice channel.
                 CommandFeedback.Show(ctx, ctx.Host.Tr("User is not in your voice channel"));
                 return;
             }
 
-            bool mute = !member.LocalMute;
-            await rpc.CommandAsync("SET_USER_VOICE_SETTINGS",
-                new JsonObject { ["user_id"] = userId, ["mute"] = mute }).ConfigureAwait(false);
-            tracker.ApplyUserSettings(userId, null, mute);
-            CommandFeedback.Show(ctx, mute ? $"🔇 {member.DisplayName}" : $"🔊 {member.DisplayName}");
+            CommandFeedback.Show(ctx, mute.Value ? "🔇" : "🔊");
         }
         catch (Exception ex)
         {

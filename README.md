@@ -82,7 +82,8 @@ RPC docs, "Restrictions").
 | `Discord.VoiceInputMode` | `mode` | Voice activity ↔ push to talk (*On* = push to talk). |
 | `Discord.OutputVolume` | `step` (default 5) | Dial: output volume 0–200, press to deafen. |
 | `Discord.UserVolume` | `userId`, `step` (default 10) | Dial: how loud you hear a user (0–200 %), press to mute them for you. |
-| `Discord.UserMute` | `userId` | Mute a user for you only. |
+| `Discord.VoiceUsers` | – | Opens a live folder with the people in your voice channel: tap to select, tap again to mute them for you, the first dial changes their volume. |
+| `Discord.UserMute` | `userId` | Mute a user for you only (macros and command line). |
 | `Discord.JoinVoiceChannel` | `channelId`, `force` | Join a voice channel. Without `force`, Discord refuses while you are in another channel. |
 | `Discord.LeaveVoiceChannel` | – | Leave the voice channel. |
 | `Discord.CurrentVoiceChannel` | – | Shows your voice channel and how many people are in it. |
@@ -93,7 +94,7 @@ RPC docs, "Restrictions").
 | `Discord.PlaySoundboardSound` | `soundId`, `guildId` | Play a soundboard sound in your voice channel (undocumented RPC, see below). |
 
 Servers, channels and users are picked in the command menu under **Discord ▸** (*Join voice
-channel*, *Open text channel*, *Users in voice channel*, *Soundboard*). The lists come from Discord and need an
+channel*, *Open text channel*, *Soundboard*). The lists come from Discord and need an
 active connection.
 
 ## Settings
