@@ -50,6 +50,16 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
 
     public bool HasScope(string scope) => _authenticated && _grantedScopes.Contains(scope);
 
+    public async Task<bool> EnsureScopeAsync(string scope)
+    {
+        if (HasScope(scope)) return true;
+        if (!_authenticated) return false;
+
+        // Same path as the settings button: asks for the missing optional scopes once.
+        await ConnectInteractiveAsync().ConfigureAwait(false);
+        return HasScope(scope);
+    }
+
     /// <summary>True when the granted scopes lack an optional one — "Connect" asks for it again.</summary>
     private bool MissingOptionalScopes(IEnumerable<string> granted)
     {

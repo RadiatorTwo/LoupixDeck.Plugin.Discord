@@ -19,6 +19,13 @@ internal interface IDiscordRpc
     bool HasScope(string scope);
 
     /// <summary>
+    /// Makes sure an optional scope is granted, showing Discord's authorization popup if it is not.
+    /// Only call this in response to a user action (a button press) — never in the background.
+    /// Returns whether the scope is granted afterwards.
+    /// </summary>
+    Task<bool> EnsureScopeAsync(string scope);
+
+    /// <summary>
     /// Sends any RPC command (documented or not) and returns the reply's <c>data</c>.
     /// Throws <see cref="RpcException"/>, <see cref="RpcTimeoutException"/> or
     /// <see cref="DiscordNotConnectedException"/>; <see cref="RpcErrorMapper"/> turns them into text.

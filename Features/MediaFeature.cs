@@ -107,8 +107,8 @@ internal sealed class MediaToggleCommand : DiscordStatefulCommand
 {
     public const string ScreenshareName = "Discord.ToggleScreenshare";
     public const string VideoName = "Discord.ToggleVideo";
-    public const string PermissionHint =
-        "Discord did not grant this permission — press \"Connect with Discord\" in the plugin settings";
+    public const string PermissionHint = "Discord did not grant this permission";
+    public const string ConfirmHint = "Confirm the permission in Discord";
 
     private static readonly IReadOnlyDictionary<string, StateVisual> ScreenshareVisuals =
         DiscordStates.Visuals("LIVE", "SHARE");
@@ -158,10 +158,15 @@ internal sealed class MediaToggleCommand : DiscordStatefulCommand
         {
             if (_rpc.IsReady && !_rpc.HasScope(_writeScope))
             {
-                // Simple buttons have no display for the overlay; leave a trace in the log too.
-                ctx.Host.Logger.Warn($"{Descriptor.CommandName}: scope {_writeScope} not granted.");
-                CommandFeedback.Show(ctx, ctx.Host.Tr(PermissionHint));
-                return;
+                // The press is the user's go-ahead: ask Discord for the permission right here.
+                CommandFeedback.Show(ctx, ctx.Host.Tr(ConfirmHint));
+                if (!await _rpc.EnsureScopeAsync(_writeScope).ConfigureAwait(false))
+                {
+                    // Simple buttons have no display for the overlay; leave a trace in the log too.
+                    ctx.Host.Logger.Warn($"{Descriptor.CommandName}: scope {_writeScope} not granted.");
+                    CommandFeedback.Show(ctx, ctx.Host.Tr(PermissionHint));
+                    return;
+                }
             }
 
             if (_rpc.IsReady && _tracker.Channel == null)

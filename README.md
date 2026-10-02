@@ -154,8 +154,8 @@ Camera and screen share use, from the same source:
 | scopes `rpc.screenshare.read/write`, `rpc.video.read/write` | Permissions for the above. |
 
 These scopes are requested as *optional*: if Discord refuses them, the plugin connects without
-them and only the camera and screen share buttons are unavailable. Users connected before these
-buttons existed get them by pressing **Connect with Discord** once more. Not verified yet.
+them and only the camera and screen share buttons are unavailable. If the current authorization lacks
+them, pressing one of the buttons opens Discord's authorization popup once. Not verified yet.
 
 Still open, marked `TODO(...)`:
 

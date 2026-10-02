@@ -117,5 +117,6 @@
   "Voice activity": "Sprachaktivierung",
   "Starts or stops sharing your screen in the voice channel": "Startet oder beendet die Bildschirmübertragung im Sprachkanal",
   "Turns your camera on or off in the voice channel": "Schaltet deine Kamera im Sprachkanal an oder aus",
-  "Discord did not grant this permission — press \"Connect with Discord\" in the plugin settings": "Discord hat diese Berechtigung nicht erteilt – klicke in den Plugin-Einstellungen auf „Mit Discord verbinden“"
+  "Discord did not grant this permission": "Discord hat diese Berechtigung nicht erteilt",
+  "Confirm the permission in Discord": "Bestätige die Berechtigung in Discord"
 }
