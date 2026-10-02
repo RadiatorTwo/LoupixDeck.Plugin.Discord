@@ -14,6 +14,8 @@
   <ItemGroup>
     <!-- Translations the host reads off disk from the plugin folder at runtime. -->
     <Content Include="strings.*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Plugin icon, read from the assembly so it does not depend on the install layout. -->
+    <EmbeddedResource Include="icon.png" LogicalName="LoupixDeck.Plugin.Discord.icon.png" />
   </ItemGroup>
 
   <ItemGroup>

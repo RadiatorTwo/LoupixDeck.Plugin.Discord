@@ -44,8 +44,20 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
         Version = new Version(1, 0, 0),
         SdkVersion = SdkInfo.Version,
         Author = "",
-        Description = "Controls the Discord desktop app through its local RPC interface"
+        Description = "Controls the Discord desktop app through its local RPC interface",
+        Icon = LoadIcon()
     };
+
+    /// <summary>The plugin icon (icon.png, embedded). Missing data only costs the icon.</summary>
+    private static byte[]? LoadIcon()
+    {
+        using Stream? stream = typeof(DiscordPlugin).Assembly.GetManifestResourceStream("LoupixDeck.Plugin.Discord.icon.png");
+        if (stream == null) return null;
+
+        using MemoryStream buffer = new();
+        stream.CopyTo(buffer);
+        return buffer.ToArray();
+    }
 
     public override void Initialize(IPluginHost host)
     {

@@ -164,6 +164,12 @@ Still open, marked `TODO(...)`:
 - `TODO(rpc-errors)` in `Rpc/RpcErrorMapper.cs` — the errors for a declined popup and for an
   account that is not on the tester list.
 
+## Credits
+
+The plugin icon and the button icons use [Material Design Icons](https://pictogrammers.com/library/mdi/)
+by Pictogrammers (Pictogrammers Free License; icons under Apache 2.0). The plugin is not affiliated
+with or endorsed by Discord.
+
 ## Build & deploy
 
 ```bash
