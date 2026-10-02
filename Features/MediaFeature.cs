@@ -153,6 +153,8 @@ internal sealed class MediaToggleCommand : DiscordStatefulCommand
         {
             if (!_enabled())
             {
+                // Simple buttons have no display for the overlay; leave a trace in the log too.
+                ctx.Host.Logger.Warn($"{Descriptor.CommandName}: disabled — enable \"Camera and screen share\" in the plugin settings.");
                 CommandFeedback.Show(ctx, ctx.Host.Tr(EnableHint));
                 return;
             }
