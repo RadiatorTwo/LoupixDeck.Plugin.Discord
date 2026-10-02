@@ -128,7 +128,7 @@ active connection.
 3. Report failures with `CommandFeedback.ShowError(ctx, name, ex, context)`; `RpcErrorMapper`
    turns RPC codes into readable text.
 4. Add one line to `DiscordPlugin.CreateFeatures`.
-5. Add the new visible strings to `strings.de.json`.
+5. Add the new visible strings to `strings.de.json` and `strings.es.json`.
 
 If the feature needs a new scope, existing users see *New permissions needed* and connect once more.
 
