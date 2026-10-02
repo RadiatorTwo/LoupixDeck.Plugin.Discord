@@ -141,12 +141,7 @@ internal sealed class SoundboardFeature : IDiscordFeature, IDisposable
     public IEnumerable<MenuNode> GetMenuNodes(ButtonTargets target)
     {
         IReadOnlyList<SoundboardSound> sounds = _sounds;
-        if (sounds.Count == 0)
-        {
-            // New servers or sounds since the last load: refresh for the next time the menu opens.
-            if (_rpc.IsReady) LoadSoundsInBackground();
-            return [];
-        }
+        if (sounds.Count == 0) return [];
 
         List<MenuNode> groups = sounds
             .GroupBy(s => s.GuildId ?? string.Empty)
@@ -179,21 +174,33 @@ internal sealed class SoundboardFeature : IDiscordFeature, IDisposable
         }
     };
 
-    private void LoadSoundsInBackground() => _ = Task.Run(async () =>
+    /// <summary>Fresh list on every menu build — sounds have no change event over RPC.</summary>
+    public Task RefreshForMenuAsync(CancellationToken ct) => LoadSoundsAsync(ct);
+
+    private void LoadSoundsInBackground() => _ = Task.Run(() => LoadSoundsAsync(CancellationToken.None));
+
+    private async Task LoadSoundsAsync(CancellationToken ct)
     {
         try
         {
-            _sounds = await _catalog.GetSoundsAsync(CancellationToken.None).ConfigureAwait(false);
+            _sounds = await _catalog.GetSoundsAsync(ct).ConfigureAwait(false);
             return;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return; // Menu timeout: keep the cached list.
         }
         catch (Exception ex)
         {
             _logger.Warn($"GET_SOUNDBOARD_SOUNDS failed ({ex.Message}); falling back to the built-in sounds.");
         }
 
-        try { _sounds = await _fallbackCatalog.GetSoundsAsync(CancellationToken.None).ConfigureAwait(false); }
+        // Only fill an empty list; a stale server list beats replacing it with built-ins only.
+        if (_sounds.Count > 0) return;
+
+        try { _sounds = await _fallbackCatalog.GetSoundsAsync(ct).ConfigureAwait(false); }
         catch (Exception ex) { _logger.Warn($"Loading Discord soundboard sounds failed: {ex.Message}"); }
-    });
+    }
 
     public void Dispose() => _rpc.Authenticated -= LoadSoundsInBackground;
 }

@@ -24,4 +24,10 @@ internal interface IDiscordFeature
     /// Must answer from cached data; the host gives the whole menu 5 seconds.
     /// </summary>
     IEnumerable<MenuNode> GetMenuNodes(ButtonTargets target) => [];
+
+    /// <summary>
+    /// Called before <see cref="GetMenuNodes"/> each time the menu is built, to refresh cached
+    /// lists from Discord. Bounded by <paramref name="ct"/>; on timeout the old cache is shown.
+    /// </summary>
+    Task RefreshForMenuAsync(CancellationToken ct) => Task.CompletedTask;
 }

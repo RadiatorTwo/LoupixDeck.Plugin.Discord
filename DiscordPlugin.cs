@@ -22,6 +22,8 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
     private const string DefaultRedirectUri = "http://localhost";
     private const string DeveloperPortalUrl = "https://discord.com/developers/applications";
 
+    private static readonly TimeSpan MenuRefreshTimeout = TimeSpan.FromSeconds(3);
+
     private readonly ScopeRegistry _scopes = new();
     private readonly List<IDiscordFeature> _features = [];
     private readonly List<IPluginCommand> _commands = [];
@@ -332,8 +334,10 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
         });
     }
 
-    public Task<IReadOnlyList<MenuNode>> GetMenuNodes(ButtonTargets target)
+    public async Task<IReadOnlyList<MenuNode>> GetMenuNodes(ButtonTargets target)
     {
+        await RefreshMenuDataAsync().ConfigureAwait(false);
+
         List<MenuNode> children = [];
         foreach (IDiscordFeature feature in _features)
         {
@@ -341,10 +345,33 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
             catch (Exception ex) { _host?.Logger.Warn($"Discord menu entries failed: {ex.Message}"); }
         }
 
-        IReadOnlyList<MenuNode> roots = children.Count == 0
+        return children.Count == 0
             ? []
             : [new MenuNode { Name = "Discord", Children = children }];
-        return Task.FromResult(roots);
+    }
+
+    /// <summary>
+    /// Lets features fetch fresh lists so new sounds or channels show up when the menu opens.
+    /// Bounded well inside the host's 5-second menu budget; on timeout the cached lists are used.
+    /// </summary>
+    private async Task RefreshMenuDataAsync()
+    {
+        if (_session?.IsReady != true) return;
+
+        using CancellationTokenSource cts = new(MenuRefreshTimeout);
+        try
+        {
+            await Task.WhenAll(_features.Select(f => f.RefreshForMenuAsync(cts.Token))).WaitAsync(cts.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            _host?.Logger.Info("Refreshing Discord menu data timed out; showing cached lists.");
+        }
+        catch (Exception ex)
+        {
+            _host?.Logger.Warn($"Refreshing Discord menu data failed: {ex.Message}");
+        }
     }
 
     public IReadOnlyList<PluginRequirement> GetRequirements()
