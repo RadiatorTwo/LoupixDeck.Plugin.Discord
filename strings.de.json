@@ -2,7 +2,6 @@
   "Discord": "Discord",
   "Controls the Discord desktop app through its local RPC interface": "Steuert die Discord-Desktop-App über ihre lokale RPC-Schnittstelle",
   "Voice, channels and status of the Discord app": "Sprache, Kanäle und Status der Discord-App",
-
   "Discord: Connection Status": "Discord: Verbindungsstatus",
   "Shows whether the plugin is connected to Discord; press to reconnect": "Zeigt, ob das Plugin mit Discord verbunden ist; Drücken verbindet neu",
   "Discord: Microphone Mute": "Discord: Mikrofon stumm",
@@ -29,7 +28,6 @@
   "Switches the Discord app to a text channel": "Wechselt die Discord-App in einen Textkanal",
   "Discord: Play Soundboard Sound": "Discord: Soundboard-Sound abspielen",
   "Plays a soundboard sound in your voice channel": "Spielt einen Soundboard-Sound in deinem Sprachkanal ab",
-
   "mode": "Modus",
   "step": "Schrittweite",
   "userId": "Nutzer-ID",
@@ -39,12 +37,10 @@
   "guildId": "Server-ID",
   "Off": "Aus",
   "On": "An",
-
   "Users in voice channel": "Nutzer im Sprachkanal",
   "Join voice channel": "Sprachkanal betreten",
   "Open text channel": "Textkanal öffnen",
   "Soundboard": "Soundboard",
-
   "Status: {0}": "Status: {0}",
   "Starting…": "Startet…",
   "Discord application": "Discord-Application",
@@ -63,10 +59,8 @@
   "Sign out": "Abmelden",
   "Open Developer Portal": "Developer Portal öffnen",
   "Signed out — stored tokens deleted": "Abgemeldet – gespeicherte Tokens gelöscht",
-
   "Discord connection": "Discord-Verbindung",
   "Open the Discord plugin settings and press \"Connect with Discord\".": "Öffne die Einstellungen des Discord-Plugins und klicke auf „Mit Discord verbinden“.",
-
   "Connected": "Verbunden",
   "Connected as {0}": "Verbunden als {0}",
   "Connecting…": "Verbinde…",
@@ -77,7 +71,6 @@
   "Not authorized": "Nicht autorisiert",
   "Not set up": "Nicht eingerichtet",
   "Error": "Fehler",
-
   "Discord is not connected": "Discord ist nicht verbunden",
   "Discord is not running": "Discord läuft nicht",
   "Not authorized — connect in the plugin settings": "Nicht autorisiert – verbinde dich in den Plugin-Einstellungen",
@@ -101,9 +94,20 @@
   "Redirect URI does not match the one in the Developer Portal": "Die Redirect-URI stimmt nicht mit der im Developer Portal überein",
   "Client ID or client secret is wrong": "Client ID oder Client Secret ist falsch",
   "Discord token request failed ({0})": "Token-Anfrage an Discord fehlgeschlagen ({0})",
-
   "No voice channel": "Kein Sprachkanal",
   "Joined": "Beigetreten",
   "User is not in your voice channel": "Nutzer ist nicht in deinem Sprachkanal",
-  "Soundboard is not supported yet": "Soundboard wird noch nicht unterstützt"
+  "Soundboard is not supported yet": "Soundboard wird noch nicht unterstützt",
+  "RPC tester: command": "RPC-Tester: Befehl",
+  "Any RPC command, e.g. GET_VOICE_SETTINGS. Save, then press \"Send RPC command\". Error 4002 means the command does not exist": "Beliebiger RPC-Befehl, z. B. GET_VOICE_SETTINGS. Speichern, dann „RPC-Befehl senden“ klicken. Fehler 4002 bedeutet: den Befehl gibt es nicht",
+  "RPC tester: arguments (JSON)": "RPC-Tester: Argumente (JSON)",
+  "JSON object sent as args, e.g. {\"channel_id\": \"123\"}": "JSON-Objekt, das als args gesendet wird, z. B. {\"channel_id\": \"123\"}",
+  "RPC tester: event (SUBSCRIBE only)": "RPC-Tester: Event (nur SUBSCRIBE)",
+  "Event name for SUBSCRIBE/UNSUBSCRIBE; leave empty otherwise. Incoming events appear in the log when \"Log RPC traffic\" is on": "Event-Name für SUBSCRIBE/UNSUBSCRIBE, sonst leer lassen. Eingehende Events erscheinen im Log, wenn „RPC-Verkehr protokollieren“ an ist",
+  "Send RPC command": "RPC-Befehl senden",
+  "Enter an RPC command and save the settings first": "Erst einen RPC-Befehl eintragen und die Einstellungen speichern",
+  "Arguments must be a JSON object, e.g. {\"key\": \"value\"}": "Argumente müssen ein JSON-Objekt sein, z. B. {\"key\": \"value\"}",
+  "Invalid JSON: {0}": "Ungültiges JSON: {0}",
+  "command does not exist": "Befehl existiert nicht",
+  "full reply in the log": "vollständige Antwort im Log"
 }

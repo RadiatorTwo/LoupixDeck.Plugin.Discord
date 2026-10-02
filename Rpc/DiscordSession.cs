@@ -119,6 +119,18 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
         return _rpc.SendCommandAsync(cmd, args, timeout: timeout, ct: ct);
     }
 
+    /// <summary>
+    /// Diagnostics: sends an arbitrary command, with the top-level <c>evt</c> that SUBSCRIBE needs.
+    /// Events subscribed this way are not tracked by the event bus; they only show up in the debug log.
+    /// </summary>
+    public Task<JsonElement> SendDiagnosticAsync(string cmd, JsonObject? args, string? evt)
+    {
+        if (!_authenticated)
+            throw new DiscordNotConnectedException(State.Describe(_tr));
+
+        return _rpc.SendCommandAsync(cmd, args, evt);
+    }
+
     public IDisposable Subscribe(string evt, JsonObject? args, Action<JsonElement> handler) =>
         _bus.Subscribe(evt, args, handler);
 

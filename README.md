@@ -99,6 +99,7 @@ active connection.
 |---|---|
 | Client ID / Client secret / Redirect URI | The Discord application, see [Setup](#setup). |
 | Log RPC traffic | Writes every RPC message in both directions to the LoupixDeck log. Tokens, the OAuth code and the client secret are masked. Meant for finding undocumented commands and events. |
+| RPC tester: command / arguments / event | Sends any RPC command with JSON arguments (and, for `SUBSCRIBE`, an event name) on the authenticated connection. Save the fields, then press **Send RPC command**; the reply is shown below the button and written to the log. `ERROR 4002` means the command does not exist. |
 
 ## Development
 

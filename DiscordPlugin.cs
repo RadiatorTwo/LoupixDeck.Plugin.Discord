@@ -12,6 +12,9 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
     private const string ClientSecretKey = "clientSecret";
     private const string RedirectUriKey = "redirectUri";
     private const string DebugLogKey = "debugLog";
+    private const string TestCommandKey = "rpcTestCommand";
+    private const string TestArgsKey = "rpcTestArgs";
+    private const string TestEventKey = "rpcTestEvent";
 
     /// <summary>Name of the client secret in the <see cref="ISecretStore"/> (never in settings.json).</summary>
     private const string ClientSecretName = "client_secret";
@@ -29,6 +32,7 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
     private IPluginHost? _host;
     private ISecretStore? _secrets;
     private DiscordSession? _session;
+    private RpcTester? _tester;
     private string _lastClientId = string.Empty;
 
     public override PluginMetadata Metadata { get; } = new()
@@ -49,6 +53,7 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
 
         RpcDebugLog debugLog = new(host.Logger, () => host.Settings.Get<bool>(DebugLogKey));
         _session = new DiscordSession(ReadAppConfig, _secrets, _scopes, host.Logger, debugLog, host.Tr);
+        _tester = new RpcTester(_session, host.Logger, host.Tr);
 
         foreach (IDiscordFeature feature in CreateFeatures(_session, host))
         {
@@ -206,6 +211,28 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
                 Kind = PluginSettingKind.Toggle,
                 DefaultValue = false,
                 Description = "Writes every RPC message to the LoupixDeck log with tokens masked — for finding undocumented commands and events"
+            },
+            new()
+            {
+                Key = TestCommandKey,
+                Label = "RPC tester: command",
+                Kind = PluginSettingKind.Text,
+                Description = "Any RPC command, e.g. GET_VOICE_SETTINGS. Save, then press \"Send RPC command\". Error 4002 means the command does not exist"
+            },
+            new()
+            {
+                Key = TestArgsKey,
+                Label = "RPC tester: arguments (JSON)",
+                Kind = PluginSettingKind.Text,
+                DefaultValue = "{}",
+                Description = "JSON object sent as args, e.g. {\"channel_id\": \"123\"}"
+            },
+            new()
+            {
+                Key = TestEventKey,
+                Label = "RPC tester: event (SUBSCRIBE only)",
+                Kind = PluginSettingKind.Text,
+                Description = "Event name for SUBSCRIBE/UNSUBSCRIBE; leave empty otherwise. Incoming events appear in the log when \"Log RPC traffic\" is on"
             }
         ];
     }
@@ -221,6 +248,11 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
         {
             Label = "Sign out",
             Invoke = SignOutAsync
+        },
+        new()
+        {
+            Label = "Send RPC command",
+            Invoke = SendTestCommandAsync
         },
         new()
         {
@@ -251,6 +283,15 @@ public sealed class DiscordPlugin : LoupixPlugin, IPluginSettingsPage, IMenuCont
             _host?.Logger.Error("Connecting to Discord failed", ex);
             return RpcErrorMapper.Describe(ex, RpcErrorContext.Authorize, Tr);
         }
+    }
+
+    private Task<string> SendTestCommandAsync()
+    {
+        if (_tester == null || _host == null) return Task.FromResult(string.Empty);
+
+        IPluginSettings settings = _host.Settings;
+        return _tester.SendAsync(settings.Get<string>(TestCommandKey), settings.Get<string>(TestArgsKey),
+            settings.Get<string>(TestEventKey));
     }
 
     private async Task<string> SignOutAsync()
