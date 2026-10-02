@@ -6,13 +6,14 @@ using LoupixDeck.PluginSdk;
 namespace LoupixDeck.Plugin.Discord.Rpc;
 
 /// <summary>Result of an authentication attempt; <see cref="Failure"/> is already translated.</summary>
-internal sealed record AuthOutcome(bool Success, string? UserName, string? Failure, bool NeedsAuthorization)
+internal sealed record AuthOutcome(bool Success, string? UserId, string? UserName, string? Failure,
+    bool NeedsAuthorization)
 {
-    public static AuthOutcome Ok(string? user) => new(true, user, null, false);
+    public static AuthOutcome Ok(string? userId, string? userName) => new(true, userId, userName, null, false);
 
-    public static AuthOutcome NeedsAuth(string message) => new(false, null, message, true);
+    public static AuthOutcome NeedsAuth(string message) => new(false, null, null, message, true);
 
-    public static AuthOutcome Failed(string message) => new(false, null, message, false);
+    public static AuthOutcome Failed(string message) => new(false, null, null, message, false);
 }
 
 /// <summary>
@@ -152,11 +153,15 @@ internal sealed class DiscordAuthenticator(
                 SaveTokens(tokens with { Scopes = grantedScopes });
         }
 
-        string? user = null;
+        string? userId = null;
+        string? userName = null;
         if (data.TryGetProperty("user", out JsonElement u))
-            user = DiscordRpcClient.GetString(u, "global_name") ?? DiscordRpcClient.GetString(u, "username");
+        {
+            userId = DiscordRpcClient.GetString(u, "id");
+            userName = DiscordRpcClient.GetString(u, "global_name") ?? DiscordRpcClient.GetString(u, "username");
+        }
 
-        return AuthOutcome.Ok(user);
+        return AuthOutcome.Ok(userId, userName);
     }
 
     private async Task<TokenSet> RefreshAsync(DiscordAppConfig app, TokenSet tokens, CancellationToken ct)

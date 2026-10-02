@@ -42,6 +42,8 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
 
     public bool IsReady => _authenticated;
 
+    public string? CurrentUserId { get; private set; }
+
     public event Action<DiscordConnectionState>? StateChanged;
 
     public event Action? Authenticated;
@@ -178,6 +180,7 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
         }
 
         _authenticated = true;
+        CurrentUserId = outcome.UserId;
         SetState(new DiscordConnectionState(DiscordConnectionStatus.Connected, outcome.UserName));
         _logger.Info("Discord RPC authenticated.");
 

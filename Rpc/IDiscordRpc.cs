@@ -12,6 +12,9 @@ internal interface IDiscordRpc
     /// <summary>True while connected and authenticated — commands can be sent.</summary>
     bool IsReady { get; }
 
+    /// <summary>ID of the signed-in Discord user, from AUTHENTICATE.</summary>
+    string? CurrentUserId { get; }
+
     /// <summary>
     /// Sends any RPC command (documented or not) and returns the reply's <c>data</c>.
     /// Throws <see cref="RpcException"/>, <see cref="RpcTimeoutException"/> or
