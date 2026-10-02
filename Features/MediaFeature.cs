@@ -156,6 +156,7 @@ internal sealed class MediaToggleCommand : DiscordStatefulCommand
     {
         try
         {
+            bool reauthorized = false;
             if (_rpc.IsReady && !_rpc.HasScope(_writeScope))
             {
                 // The press is the user's go-ahead: ask Discord for the permission right here.
@@ -167,9 +168,13 @@ internal sealed class MediaToggleCommand : DiscordStatefulCommand
                     CommandFeedback.Show(ctx, ctx.Host.Tr(PermissionHint));
                     return;
                 }
+
+                reauthorized = true;
             }
 
-            if (_rpc.IsReady && _tracker.Channel == null)
+            // Right after re-authorizing the connection is new and the voice cache still empty;
+            // let Discord decide whether a voice channel is active.
+            if (!reauthorized && _rpc.IsReady && _tracker.Channel == null)
             {
                 CommandFeedback.Show(ctx, ctx.Host.Tr(RpcErrorMapper.NotInVoiceChannel));
                 return;

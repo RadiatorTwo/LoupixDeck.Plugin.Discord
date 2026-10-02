@@ -23,6 +23,12 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
     private readonly CancellationTokenSource _shutdown = new();
     private volatile bool _authenticated;
 
+    /// <summary>Set by <see cref="ReauthorizeAsync"/>: the next READY runs AUTHORIZE instead of the stored token.</summary>
+    private TaskCompletionSource<string>? _pendingAuthorization;
+
+    /// <summary>How long a re-authorization waits for the reconnect plus the user's answer to the popup.</summary>
+    private static readonly TimeSpan ReauthorizeTimeout = TimeSpan.FromMinutes(4);
+
     public DiscordSession(Func<DiscordAppConfig> config, ISecretStore secrets, ScopeRegistry scopes,
         IPluginLogger logger, RpcDebugLog debug, Func<string, string> tr)
     {
@@ -84,7 +90,8 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
 
     /// <summary>
     /// The "Connect with Discord" button: uses the stored token if it still works, otherwise runs
-    /// AUTHORIZE (popup in Discord). Returns a translated status line for the settings page.
+    /// AUTHORIZE (popup in Discord). Also fetches optional scopes the token lacks. Returns a
+    /// translated status line for the settings page.
     /// </summary>
     public async Task<string> ConnectInteractiveAsync()
     {
@@ -98,40 +105,50 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
         await _authLock.WaitAsync(_shutdown.Token).ConfigureAwait(false);
         try
         {
-            if (_authenticated && !MissingOptionalScopes(_grantedScopes))
-                return State.Describe(_tr);
-
-            // The stored token is enough unless optional permissions (a feature added since) are
-            // missing; then the popup asks for them, and Discord may still refuse them.
-            AuthOutcome? stored = null;
             if (!_authenticated)
             {
-                stored = await _auth.AuthenticateStoredAsync(_shutdown.Token).ConfigureAwait(false);
-                if (stored.Success && !MissingOptionalScopes(stored.GrantedScopes))
+                AuthOutcome stored = await _auth.AuthenticateStoredAsync(_shutdown.Token).ConfigureAwait(false);
+                if (!stored.Success)
                 {
-                    await ApplyAsync(stored).ConfigureAwait(false);
-                    return State.Describe(_tr);
+                    // Not authenticated on this connection, so AUTHORIZE is allowed here.
+                    AuthOutcome authorized = await _auth.AuthorizeAsync(_shutdown.Token).ConfigureAwait(false);
+                    await ApplyAsync(authorized).ConfigureAwait(false);
+                    return authorized.Success ? State.Describe(_tr) : authorized.Failure ?? State.Describe(_tr);
                 }
-            }
 
-            AuthOutcome authorized = await _auth.AuthorizeAsync(_shutdown.Token).ConfigureAwait(false);
-            if (authorized.Success)
-            {
-                await ApplyAsync(authorized).ConfigureAwait(false);
-                return State.Describe(_tr);
-            }
-
-            // Authorization failed (declined popup, …): keep whatever already works.
-            if (stored?.Success == true)
                 await ApplyAsync(stored).ConfigureAwait(false);
-            else if (!_authenticated)
-                await ApplyAsync(authorized).ConfigureAwait(false);
+            }
 
-            return authorized.Failure ?? State.Describe(_tr);
+            if (!MissingOptionalScopes(_grantedScopes))
+                return State.Describe(_tr);
         }
         finally
         {
             _authLock.Release();
+        }
+
+        return await ReauthorizeAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Asks for additional scopes. Discord answers AUTHORIZE on an authenticated connection with
+    /// 4002 "Already authenticated", so this reconnects and lets <see cref="OnReady"/> run AUTHORIZE
+    /// on the fresh connection before anything authenticates it.
+    /// </summary>
+    private async Task<string> ReauthorizeAsync()
+    {
+        TaskCompletionSource<string> pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        Interlocked.Exchange(ref _pendingAuthorization, pending)?.TrySetResult(State.Describe(_tr));
+        Restart();
+
+        try
+        {
+            return await pending.Task.WaitAsync(ReauthorizeTimeout, _shutdown.Token).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            Interlocked.CompareExchange(ref _pendingAuthorization, null, pending);
+            return State.Describe(_tr);
         }
     }
 
@@ -209,6 +226,14 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
             try
             {
                 if (_authenticated) return;
+
+                TaskCompletionSource<string>? pending = Interlocked.Exchange(ref _pendingAuthorization, null);
+                if (pending != null)
+                {
+                    await AuthorizeOnFreshConnectionAsync(pending).ConfigureAwait(false);
+                    return;
+                }
+
                 AuthOutcome outcome = await _auth.AuthenticateStoredAsync(_shutdown.Token).ConfigureAwait(false);
                 await ApplyAsync(outcome).ConfigureAwait(false);
             }
@@ -221,6 +246,31 @@ internal sealed class DiscordSession : IDiscordRpc, IAsyncDisposable
         catch (Exception ex)
         {
             _logger.Error("Discord authentication after connect failed", ex);
+        }
+    }
+
+    /// <summary>Runs a requested re-authorization; falls back to the stored token if the user declines.</summary>
+    private async Task AuthorizeOnFreshConnectionAsync(TaskCompletionSource<string> pending)
+    {
+        try
+        {
+            AuthOutcome authorized = await _auth.AuthorizeAsync(_shutdown.Token).ConfigureAwait(false);
+            if (authorized.Success)
+            {
+                await ApplyAsync(authorized).ConfigureAwait(false);
+                pending.TrySetResult(State.Describe(_tr));
+                return;
+            }
+
+            // Declined or refused: keep the session that worked before.
+            AuthOutcome stored = await _auth.AuthenticateStoredAsync(_shutdown.Token).ConfigureAwait(false);
+            await ApplyAsync(stored.Success ? stored : authorized).ConfigureAwait(false);
+            pending.TrySetResult(authorized.Failure ?? State.Describe(_tr));
+        }
+        catch (Exception ex)
+        {
+            pending.TrySetException(ex);
+            throw;
         }
     }
 
